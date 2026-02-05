@@ -1,0 +1,63 @@
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+import type { Framework } from "../types.js";
+
+export async function detectFramework(dir: string): Promise<Framework> {
+  const framework: Framework = {
+    name: "Unknown",
+    language: "JavaScript",
+  };
+
+  // Read package.json
+  const pkgPath = join(dir, "package.json");
+  if (!existsSync(pkgPath)) {
+    return framework;
+  }
+
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+
+  // Detect TypeScript
+  if (deps.typescript || existsSync(join(dir, "tsconfig.json"))) {
+    framework.language = "TypeScript";
+  }
+
+  // Detect framework
+  if (deps.next) {
+    framework.name = "Next.js";
+    framework.version = deps.next.replace(/[\^~]/, "");
+
+    // Detect router type
+    if (existsSync(join(dir, "src/app")) || existsSync(join(dir, "app"))) {
+      framework.router = "App Router";
+    } else if (existsSync(join(dir, "src/pages")) || existsSync(join(dir, "pages"))) {
+      framework.router = "Pages Router";
+    }
+  } else if (deps["@remix-run/react"] || deps.remix) {
+    framework.name = "Remix";
+    framework.version = deps["@remix-run/react"] || deps.remix;
+  } else if (deps.vite) {
+    framework.name = "Vite";
+    framework.version = deps.vite?.replace(/[\^~]/, "");
+  } else if (deps.react) {
+    framework.name = "React";
+    framework.version = deps.react?.replace(/[\^~]/, "");
+  } else if (deps.vue) {
+    framework.name = "Vue";
+    framework.version = deps.vue?.replace(/[\^~]/, "");
+  } else if (deps.svelte) {
+    framework.name = "Svelte";
+    framework.version = deps.svelte?.replace(/[\^~]/, "");
+  }
+
+  // Detect styling
+  if (deps.tailwindcss) {
+    framework.styling = "Tailwind CSS";
+  } else if (deps["styled-components"]) {
+    framework.styling = "styled-components";
+  } else if (deps["@emotion/react"]) {
+    framework.styling = "Emotion";
+  }
+
+  return framework;
+}

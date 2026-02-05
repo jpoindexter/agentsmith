@@ -1,0 +1,42 @@
+{
+  "name": "agentsmith",
+  "version": "0.1.0",
+  "description": "Auto-generate AGENTS.md from your codebase",
+  "type": "module",
+  "bin": {
+    "agentsmith": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsup src/cli.ts --format esm --dts",
+    "dev": "tsup src/cli.ts --format esm --watch",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "agents.md",
+    "context",
+    "cli",
+    "codebase",
+    "llm",
+    "cursor",
+    "copilot",
+    "claude"
+  ],
+  "author": "Jason Poindexter",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "cac": "^6.7.14",
+    "fast-glob": "^3.3.0",
+    "picocolors": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
