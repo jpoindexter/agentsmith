@@ -8,23 +8,23 @@ import { formatAntiPatterns } from "./scanners/anti-patterns.js";
 export interface GeneratorOptions {
   compact?: boolean;
   compress?: boolean;
-  minimal?: boolean;      // Ultra-compact: TL;DR + rules + component names only (~3K tokens)
+  minimal?: boolean;      // Ultra-compact: TL;DR + rules + component names only (~1K tokens)
   includeTree?: boolean;  // Include file tree (off by default)
-  xml?: boolean;          // Output in XML format for better AI parsing
+  xml?: boolean;          // XML format (industry standard, matches Repomix)
 }
 
 export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
   const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns } = result;
   const { compact = false, compress = false, minimal = false, includeTree = false, xml = false } = options;
 
-  // Minimal mode: ultra-compact output (~3K tokens)
+  // Minimal mode: ultra-compact output (~1K tokens)
   if (minimal) {
     return generateMinimalOutput(result, options);
   }
 
-  // XML mode: structured output for better AI parsing
+  // XML mode: structured output (industry standard, matches Repomix)
   if (xml) {
-    return generateXmlOutput(result, options);
+    return generateXmlOutput(result);
   }
 
   const lines: string[] = [];
@@ -816,64 +816,55 @@ function generateMinimalOutput(result: ScanResult, options: GeneratorOptions): s
 }
 
 /**
- * Generate XML-structured output for better AI parsing
- * Uses semantic XML tags that Claude was trained to understand
+ * Generate XML-structured output (industry standard, matches Repomix)
  */
-function generateXmlOutput(result: ScanResult, options: GeneratorOptions): string {
-  const { components, tokens, framework, utilities, hooks, apiRoutes, database, existingContext, antiPatterns, importGraph } = result;
+function generateXmlOutput(result: ScanResult): string {
+  const { components, tokens, framework, utilities, hooks, apiRoutes, database, importGraph } = result;
   const lines: string[] = [];
 
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
   lines.push('<agents-context version="1.0">');
   lines.push('');
 
-  // Quick reference
+  // Summary
   lines.push('  <summary>');
   const stackParts: string[] = [framework.name];
   if (framework.language === "TypeScript") stackParts.push("TypeScript");
   if (framework.styling) stackParts.push(framework.styling);
   lines.push(`    <stack>${stackParts.join(" + ")}</stack>`);
   lines.push(`    <components count="${components.length}">USE EXISTING - don't create new</components>`);
-  if (utilities.hasCn) lines.push(`    <utility name="cn" path="${utilities.cnPath}" />`);
-  if (utilities.hasMode) lines.push(`    <utility name="mode" path="${utilities.modePath}" />`);
+  if (utilities.hasCn) lines.push(`    <utility name="cn" path="${escapeXml(utilities.cnPath || '')}" />`);
+  if (utilities.hasMode) lines.push(`    <utility name="mode" path="${escapeXml(utilities.modePath || '')}" />`);
   if (database) lines.push(`    <database provider="${database.provider}" models="${database.models.length}" />`);
   lines.push('  </summary>');
   lines.push('');
 
-  // Critical rules with examples
+  // Rules with examples
   lines.push('  <rules priority="critical">');
-  lines.push('');
   lines.push('    <rule name="use-existing-components">');
   lines.push(`      <description>This project has ${components.length} components. Check before creating new.</description>`);
   lines.push('      <example type="wrong"><![CDATA[<div className="rounded border p-4">...</div>]]></example>');
   lines.push('      <example type="right"><![CDATA[<Card><CardContent>...</CardContent></Card>]]></example>');
   lines.push('    </rule>');
-  lines.push('');
   lines.push('    <rule name="use-design-tokens">');
   lines.push('      <description>Never hardcode colors. Use semantic tokens.</description>');
   lines.push('      <example type="wrong"><![CDATA[className="bg-blue-500 text-white"]]></example>');
   lines.push('      <example type="right"><![CDATA[className="bg-primary text-primary-foreground"]]></example>');
   lines.push('    </rule>');
-  lines.push('');
-
   if (utilities.hasCn) {
     lines.push('    <rule name="use-cn-utility">');
-    lines.push(`      <description>Import from ${utilities.cnPath}. Use for conditional classes.</description>`);
+    lines.push(`      <description>Import from ${escapeXml(utilities.cnPath || '')}. Use for conditional classes.</description>`);
     lines.push('      <example type="wrong"><![CDATA[className={"btn " + (active ? "active" : "")}]]></example>');
     lines.push('      <example type="right"><![CDATA[className={cn("btn", active && "active")}]]></example>');
     lines.push('    </rule>');
-    lines.push('');
   }
-
   if (utilities.hasMode) {
     lines.push('    <rule name="use-mode-design-system">');
-    lines.push(`      <description>Import from ${utilities.modePath}. Provides theme-aware styling.</description>`);
+    lines.push(`      <description>Import from ${escapeXml(utilities.modePath || '')}. Theme-aware styling.</description>`);
     lines.push('      <example type="wrong"><![CDATA[className="rounded-lg"]]></example>');
     lines.push('      <example type="right"><![CDATA[className={cn("...", mode.radius)}]]></example>');
     lines.push('    </rule>');
-    lines.push('');
   }
-
   lines.push('  </rules>');
   lines.push('');
 
@@ -923,7 +914,7 @@ function generateXmlOutput(result: ScanResult, options: GeneratorOptions): strin
     lines.push('');
   }
 
-  // Database models
+  // Database
   if (database && database.models.length > 0) {
     lines.push(`  <database provider="${database.provider}" models="${database.models.length}">`);
     for (const model of database.models.slice(0, 15)) {
@@ -934,7 +925,7 @@ function generateXmlOutput(result: ScanResult, options: GeneratorOptions): strin
     lines.push('');
   }
 
-  // Design tokens summary
+  // Design tokens
   if (Object.keys(tokens.colors).length > 0) {
     lines.push('  <design-tokens>');
     lines.push('    <colors>bg-background, bg-card, bg-muted, bg-primary, bg-secondary, bg-destructive</colors>');
@@ -946,7 +937,6 @@ function generateXmlOutput(result: ScanResult, options: GeneratorOptions): strin
   }
 
   lines.push('</agents-context>');
-
   return lines.join("\n");
 }
 

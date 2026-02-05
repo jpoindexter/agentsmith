@@ -42,13 +42,13 @@ cli
   .option("--json", "Also generate AGENTS.index.json for programmatic access")
   .option("--check-secrets", "Scan for potential secrets and warn before output")
   .option("--include-git-log", "Include recent git commits in output")
-  .option("--format <format>", "Output format: markdown, xml, or json", { default: "markdown" })
+  .option("--xml", "Output in XML format (industry standard)")
   .option("--remote <url>", "Clone and analyze a remote GitHub repository")
   .option("--compress", "Extract signatures only (reduce tokens by ~40%)")
   .option("--minimal", "Ultra-compact output (~3K tokens) - TL;DR + rules + component names")
   .option("--tree", "Include file tree in output (off by default)")
   .option("--watch", "Watch for file changes and regenerate automatically")
-  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; format?: string; remote?: string; compress?: boolean; minimal?: boolean; tree?: boolean; watch?: boolean }) => {
+  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; xml?: boolean; remote?: string; compress?: boolean; minimal?: boolean; tree?: boolean; watch?: boolean }) => {
     let targetDir = dir || process.cwd();
     let isRemote = false;
     let tempDir = "";
@@ -180,7 +180,7 @@ cli
       // Generate AGENTS.md content
       let content = generateAgentsMd(
         { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns },
-        { compact: options.compact, compress: options.compress, minimal: options.minimal, includeTree: options.tree, xml: options.format === "xml" }
+        { compact: options.compact, compress: options.compress, minimal: options.minimal, includeTree: options.tree, xml: options.xml }
       );
 
       // Append git log if included
@@ -209,30 +209,14 @@ cli
       const tokenCount = estimateTokens(content);
       const contextUsage = getContextUsage(tokenCount);
 
-      // Determine output format and file extension
-      const format = options.format || "markdown";
+      // Determine output file extension based on format
       let finalContent = content;
-      let finalOutputFile = outputFile;
-
-      // XML format is now handled directly in generateAgentsMd with xml option
-      if (format === "xml") {
-        finalOutputFile = outputFile.replace(".md", ".xml");
-      } else if (format === "json" && !options.json) {
-        // If --format json is used (not --json for index), output as JSON
-        const jsonData = {
-          version: "1.0",
-          generated: new Date().toISOString(),
-          content: content,
-          stats: { tokens: tokenCount, characters: content.length },
-        };
-        finalContent = JSON.stringify(jsonData, null, 2);
-        finalOutputFile = outputFile.replace(".md", ".json");
-      }
+      let finalOutputFile = options.xml ? outputFile.replace(".md", ".xml") : outputFile;
 
       if (options.dryRun) {
         console.log(pc.yellow("\n  Dry run - would generate:\n"));
         console.log(pc.dim("  " + finalOutputFile));
-        if (options.json && format === "markdown") {
+        if (options.json && !options.xml) {
           console.log(pc.dim("  " + outputFile.replace(".md", ".index.json")));
         }
         console.log(pc.dim(`  ${finalContent.length.toLocaleString()} chars · ~${formatTokens(tokenCount)} tokens (${contextUsage}% of 128K context)\n`));
@@ -243,8 +227,8 @@ cli
         writeFileSync(outputPath, finalContent, "utf-8");
         console.log(pc.green(`\n  ✓ Generated ${finalOutputFile}`));
 
-        // Generate JSON index if requested (separate from --format json)
-        if (options.json && format === "markdown") {
+        // Generate JSON index if requested (not with --xml)
+        if (options.json && !options.xml) {
           const jsonContent = generateAgentsIndex(
             { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns },
             content
