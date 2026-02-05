@@ -318,3 +318,7 @@ agentsmith is specifically designed for the AGENTS.md standard with opinionated 
 ## License
 
 MIT
+
+---
+
+Built by [Fabrk](https://fabrk.dev)
