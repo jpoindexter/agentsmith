@@ -38,8 +38,14 @@ const SKIP_FILES = [
   "middleware.js",
 ];
 
-export async function scanComponents(dir: string): Promise<Component[]> {
-  const files = await fg(COMPONENT_PATTERNS, {
+export async function scanComponents(dir: string, excludePatterns: string[] = []): Promise<Component[]> {
+  // Combine default patterns with user-provided exclude patterns
+  const patterns = [
+    ...COMPONENT_PATTERNS,
+    ...excludePatterns.map(p => p.startsWith("!") ? p : `!${p}`),
+  ];
+
+  const files = await fg(patterns, {
     cwd: dir,
     absolute: false,
   });

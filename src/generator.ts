@@ -3,11 +3,12 @@ import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
 
 export interface GeneratorOptions {
   compact?: boolean;
+  compress?: boolean;
 }
 
 export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
   const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies } = result;
-  const { compact = false } = options;
+  const { compact = false, compress = false } = options;
 
   const lines: string[] = [];
 
@@ -51,8 +52,8 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
   }
   lines.push("");
 
-  // Codebase Statistics Section (skip in compact mode)
-  if (!compact && stats && stats.largestFiles.length > 0) {
+  // Codebase Statistics Section (skip in compact/compress mode)
+  if (!compact && !compress && stats && stats.largestFiles.length > 0) {
     lines.push("## Codebase Statistics");
     lines.push("");
     lines.push("### Largest Files");
@@ -133,6 +134,12 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
       for (const comp of comps) {
         const allExports = comp.exports.map(e => `\`${e}\``).join(", ");
         lines.push(`- ${allExports} — \`${comp.importPath}\``);
+
+        // Compress mode: minimal output, just component names and paths
+        if (compress) {
+          // Skip all details in compress mode
+          continue;
+        }
 
         // In compact mode, limit props to 5 and skip descriptions
         if (!compact) {
