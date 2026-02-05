@@ -308,6 +308,12 @@ With AGENTS.md:
 
 agentsmith is specifically designed for the AGENTS.md standard with opinionated rules about component reuse and design tokens.
 
+## Works great in
+
+- Next.js + Tailwind + shadcn/ui projects
+- React apps with component libraries
+- Any TypeScript codebase with reusable components
+
 ## License
 
 MIT
