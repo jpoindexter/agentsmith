@@ -106,6 +106,32 @@ export interface DatabaseModel {
   relations: string[];
 }
 
+export interface FileStats {
+  totalFiles: number;
+  totalLines: number;
+  totalSize: number;
+  largestFiles: { path: string; lines: number }[];
+  filesByType: Record<string, number>;
+}
+
+export interface BarrelExport {
+  path: string;
+  importPath: string;
+  exports: string[];
+}
+
+export interface ComponentDependency {
+  component: string;
+  path: string;
+  imports: {
+    utilities: string[];
+    designSystem: string[];
+    radix: string[];
+    internal: string[];
+    external: string[];
+  };
+}
+
 export interface DatabaseSchema {
   provider: "prisma" | "drizzle" | "unknown";
   models: DatabaseModel[];
@@ -124,4 +150,7 @@ export interface ScanResult {
   envVars: EnvVar[];
   patterns: DetectedPatterns;
   database: DatabaseSchema | null;
+  stats: FileStats;
+  barrels: BarrelExport[];
+  dependencies: ComponentDependency[];
 }

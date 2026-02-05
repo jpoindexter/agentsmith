@@ -1,8 +1,13 @@
-import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns, DatabaseSchema } from "./types.js";
+import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns, DatabaseSchema, FileStats, BarrelExport, ComponentDependency } from "./types.js";
 import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
 
-export function generateAgentsMd(result: ScanResult): string {
-  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database } = result;
+export interface GeneratorOptions {
+  compact?: boolean;
+}
+
+export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
+  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies } = result;
+  const { compact = false } = options;
 
   const lines: string[] = [];
 
@@ -41,7 +46,22 @@ export function generateAgentsMd(result: ScanResult): string {
   if (patterns.patterns.length > 0) {
     lines.push(`| **Patterns** | ${patterns.patterns.length} detected |`);
   }
+  if (stats) {
+    lines.push(`| **Codebase** | ${stats.totalFiles} files, ${stats.totalLines.toLocaleString()} lines |`);
+  }
   lines.push("");
+
+  // Codebase Statistics Section (skip in compact mode)
+  if (!compact && stats && stats.largestFiles.length > 0) {
+    lines.push("## Codebase Statistics");
+    lines.push("");
+    lines.push("### Largest Files");
+    lines.push("");
+    for (const file of stats.largestFiles) {
+      lines.push(`- \`${file.path}\` (${file.lines} lines)`);
+    }
+    lines.push("");
+  }
 
   // Critical Rules - Always first and prominent
   lines.push("## Critical Rules");
@@ -114,18 +134,46 @@ export function generateAgentsMd(result: ScanResult): string {
         const allExports = comp.exports.map(e => `\`${e}\``).join(", ");
         lines.push(`- ${allExports} — \`${comp.importPath}\``);
 
-        // Add props if available
-        if (comp.props && comp.props.length > 0) {
-          lines.push(`  - Props: ${comp.props.join(", ")}`);
-        }
+        // In compact mode, limit props to 5 and skip descriptions
+        if (!compact) {
+          // Add props if available
+          if (comp.props && comp.props.length > 0) {
+            lines.push(`  - Props: ${comp.props.join(", ")}`);
+          }
 
-        // Add description if available
-        if (comp.description) {
-          lines.push(`  - ${comp.description}`);
+          // Add description if available
+          if (comp.description) {
+            lines.push(`  - ${comp.description}`);
+          }
+        } else if (comp.props && comp.props.length > 0) {
+          // Compact: show top 5 props only
+          const topProps = comp.props.slice(0, 5);
+          const more = comp.props.length > 5 ? ` (+${comp.props.length - 5})` : "";
+          lines.push(`  - Props: ${topProps.join(", ")}${more}`);
         }
       }
       lines.push("");
     }
+  }
+
+  // Barrel Imports Section
+  if (barrels && barrels.length > 0) {
+    lines.push("## Preferred Imports");
+    lines.push("");
+    lines.push("Use barrel imports instead of importing from individual files:");
+    lines.push("");
+    lines.push("```typescript");
+    for (const barrel of barrels.slice(0, 5)) {
+      const exampleExports = barrel.exports
+        .filter(e => !e.startsWith("*"))
+        .slice(0, 4)
+        .join(", ");
+      if (exampleExports) {
+        lines.push(`import { ${exampleExports} } from "${barrel.importPath}";`);
+      }
+    }
+    lines.push("```");
+    lines.push("");
   }
 
   // Hooks Section
@@ -150,6 +198,39 @@ export function generateAgentsMd(result: ScanResult): string {
       lines.push(`- \`${util}()\` — from \`${utilities.cnPath}\``);
     }
     lines.push("");
+  }
+
+  // Component Dependencies Section (skip in compact mode)
+  if (!compact && dependencies && dependencies.length > 0) {
+    // Only show components with interesting dependencies
+    const interestingDeps = dependencies.filter(
+      d => d.imports.radix.length > 0 || d.imports.designSystem.length > 0
+    ).slice(0, 15);
+
+    if (interestingDeps.length > 0) {
+      lines.push("## Component Dependencies");
+      lines.push("");
+      lines.push("Key imports for each component:");
+      lines.push("");
+
+      for (const dep of interestingDeps) {
+        const parts: string[] = [];
+        if (dep.imports.utilities.length > 0) {
+          parts.push(dep.imports.utilities.join(", "));
+        }
+        if (dep.imports.designSystem.length > 0) {
+          parts.push(dep.imports.designSystem.join(", "));
+        }
+        if (dep.imports.radix.length > 0) {
+          parts.push(`@radix-ui/${dep.imports.radix.join(", @radix-ui/")}`);
+        }
+
+        if (parts.length > 0) {
+          lines.push(`- **${dep.component}** → ${parts.join(", ")}`);
+        }
+      }
+      lines.push("");
+    }
   }
 
   // Component Variants Section
@@ -178,22 +259,27 @@ export function generateAgentsMd(result: ScanResult): string {
     lines.push("");
   }
 
-  // API Routes Section
+  // API Routes Section (grouped by base path)
   if (apiRoutes.length > 0) {
     lines.push("## API Routes");
     lines.push("");
     lines.push(`${apiRoutes.length} API endpoints:`);
     lines.push("");
 
-    for (const route of apiRoutes.slice(0, 30)) {
-      const methods = route.methods.join(", ");
-      const auth = route.isProtected ? " 🔒" : "";
-      lines.push(`- \`${methods}\` \`${route.path}\`${auth}`);
+    // Group routes by base path
+    const groupedRoutes = groupRoutesByBasePath(apiRoutes);
+    const sortedGroups = Object.entries(groupedRoutes).sort((a, b) => a[0].localeCompare(b[0]));
+
+    for (const [group, routes] of sortedGroups) {
+      lines.push(`### ${group}`);
+      lines.push("");
+      for (const route of routes) {
+        const methods = route.methods.join(", ");
+        const auth = route.isProtected ? " 🔒" : "";
+        lines.push(`- \`${methods}\` \`${route.path}\`${auth}`);
+      }
+      lines.push("");
     }
-    if (apiRoutes.length > 30) {
-      lines.push(`- ... and ${apiRoutes.length - 30} more`);
-    }
-    lines.push("");
   }
 
   // Database Models Section
@@ -474,4 +560,32 @@ function formatDirectoryName(dir: string): string {
     .split(/[-_]/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function groupRoutesByBasePath(routes: ApiRoute[]): Record<string, ApiRoute[]> {
+  const grouped: Record<string, ApiRoute[]> = {};
+
+  for (const route of routes) {
+    // Extract base path: /api/users/[id] -> Users
+    const parts = route.path.split("/").filter(Boolean);
+    // Skip "api" prefix if present
+    const startIndex = parts[0] === "api" ? 1 : 0;
+    const basePath = parts[startIndex] || "root";
+
+    // Format group name: users -> Users, user-settings -> User Settings
+    const groupName = basePath
+      .replace(/\[.*?\]/g, "") // Remove dynamic segments
+      .replace(/-/g, " ")
+      .split(" ")
+      .filter(Boolean)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ") || "Other";
+
+    if (!grouped[groupName]) {
+      grouped[groupName] = [];
+    }
+    grouped[groupName].push(route);
+  }
+
+  return grouped;
 }
