@@ -47,8 +47,13 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
   // Hub files (most impactful)
   if (importGraph && importGraph.hubFiles.length > 0) {
     const topHubs = importGraph.hubFiles.slice(0, 4).map(h => {
-      const name = h.file.split("/").pop()?.replace(/\.(ts|tsx|js|jsx)$/, "") || h.file;
-      return name;
+      const parts = h.file.split("/");
+      const filename = parts.pop()?.replace(/\.(ts|tsx|js|jsx)$/, "") || "";
+      // For index files, show parent/index (e.g., "design-system/index")
+      if (filename === "index" && parts.length > 0) {
+        return `${parts.pop()}/${filename}`;
+      }
+      return filename;
     });
     lines.push(`- **High-impact files**: ${topHubs.join(", ")} (changes affect many files)`);
   }
