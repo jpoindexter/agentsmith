@@ -1,9 +1,10 @@
 {
-  "name": "agentsmith",
+  "name": "@jpoindexter/agent-smith",
   "version": "1.0.0",
   "description": "Auto-generate AGENTS.md from your codebase",
   "type": "module",
   "bin": {
+    "agent-smith": "dist/cli.js",
     "agentsmith": "dist/cli.js"
   },
   "scripts": {

@@ -28,7 +28,7 @@ AI tools automatically discover and read `AGENTS.md` files - no configuration ne
 Instead of writing AGENTS.md manually, agentsmith **scans your codebase** and generates it:
 
 ```bash
-npx agentsmith
+npx @jpoindexter/agent-smith
 
   agentsmith
 
@@ -62,10 +62,10 @@ npx agentsmith
 
 ```bash
 # Run directly (no install needed)
-npx agentsmith
+npx @jpoindexter/agent-smith
 
 # Or install globally
-npm install -g agentsmith
+npm install -g @jpoindexter/agent-smith
 ```
 
 ## Usage
