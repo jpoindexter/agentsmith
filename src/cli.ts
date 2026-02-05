@@ -45,8 +45,10 @@ cli
   .option("--format <format>", "Output format: markdown, xml, or json", { default: "markdown" })
   .option("--remote <url>", "Clone and analyze a remote GitHub repository")
   .option("--compress", "Extract signatures only (reduce tokens by ~40%)")
+  .option("--minimal", "Ultra-compact output (~3K tokens) - TL;DR + rules + component names")
+  .option("--tree", "Include file tree in output (off by default)")
   .option("--watch", "Watch for file changes and regenerate automatically")
-  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; format?: string; remote?: string; compress?: boolean; watch?: boolean }) => {
+  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; format?: string; remote?: string; compress?: boolean; minimal?: boolean; tree?: boolean; watch?: boolean }) => {
     let targetDir = dir || process.cwd();
     let isRemote = false;
     let tempDir = "";
@@ -178,7 +180,7 @@ cli
       // Generate AGENTS.md content
       let content = generateAgentsMd(
         { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns },
-        { compact: options.compact, compress: options.compress }
+        { compact: options.compact, compress: options.compress, minimal: options.minimal, includeTree: options.tree, xml: options.format === "xml" }
       );
 
       // Append git log if included
@@ -212,8 +214,8 @@ cli
       let finalContent = content;
       let finalOutputFile = outputFile;
 
+      // XML format is now handled directly in generateAgentsMd with xml option
       if (format === "xml") {
-        finalContent = convertToXml(content);
         finalOutputFile = outputFile.replace(".md", ".xml");
       } else if (format === "json" && !options.json) {
         // If --format json is used (not --json for index), output as JSON
@@ -275,7 +277,7 @@ cli
           console.log(pc.dim(`  Regenerating...`));
           // Re-run the action without watch to regenerate
           try {
-            execSync(`node ${process.argv[1]} "${targetDir}" -o "${outputFile}" ${options.compact ? "--compact" : ""} ${options.compress ? "--compress" : ""} --force`, {
+            execSync(`node ${process.argv[1]} "${targetDir}" -o "${outputFile}" ${options.compact ? "--compact" : ""} ${options.compress ? "--compress" : ""} ${options.minimal ? "--minimal" : ""} ${options.tree ? "--tree" : ""} --force`, {
               stdio: "inherit",
             });
           } catch {
@@ -311,67 +313,5 @@ cli
   });
 
 cli.help();
-cli.version("0.1.0");
+cli.version("1.4.0");
 cli.parse();
-
-// Helper function to convert markdown to XML format
-function convertToXml(markdown: string): string {
-  const lines = markdown.split("\n");
-  const xmlLines: string[] = ['<?xml version="1.0" encoding="UTF-8"?>', "<agents-context>"];
-
-  let currentSection = "";
-  let inCodeBlock = false;
-  let codeContent: string[] = [];
-
-  for (const line of lines) {
-    // Handle code blocks
-    if (line.startsWith("```")) {
-      if (inCodeBlock) {
-        xmlLines.push(`  <code-block><![CDATA[${codeContent.join("\n")}]]></code-block>`);
-        codeContent = [];
-      }
-      inCodeBlock = !inCodeBlock;
-      continue;
-    }
-
-    if (inCodeBlock) {
-      codeContent.push(line);
-      continue;
-    }
-
-    // Handle headers
-    if (line.startsWith("# ")) {
-      xmlLines.push(`  <title>${escapeXml(line.slice(2))}</title>`);
-    } else if (line.startsWith("## ")) {
-      if (currentSection) xmlLines.push(`  </section>`);
-      currentSection = line.slice(3).toLowerCase().replace(/\s+/g, "-");
-      xmlLines.push(`  <section name="${escapeXml(line.slice(3))}">`);
-    } else if (line.startsWith("### ")) {
-      xmlLines.push(`    <subsection name="${escapeXml(line.slice(4))}">`);
-    } else if (line.startsWith("- ")) {
-      xmlLines.push(`    <item>${escapeXml(line.slice(2))}</item>`);
-    } else if (line.startsWith("|") && !line.includes("---")) {
-      // Table row
-      const cells = line.split("|").filter(Boolean).map(c => c.trim());
-      if (cells.length > 0) {
-        xmlLines.push(`    <row>${cells.map(c => `<cell>${escapeXml(c)}</cell>`).join("")}</row>`);
-      }
-    } else if (line.trim()) {
-      xmlLines.push(`    <text>${escapeXml(line)}</text>`);
-    }
-  }
-
-  if (currentSection) xmlLines.push(`  </section>`);
-  xmlLines.push("</agents-context>");
-
-  return xmlLines.join("\n");
-}
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}

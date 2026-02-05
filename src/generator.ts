@@ -8,11 +8,24 @@ import { formatAntiPatterns } from "./scanners/anti-patterns.js";
 export interface GeneratorOptions {
   compact?: boolean;
   compress?: boolean;
+  minimal?: boolean;      // Ultra-compact: TL;DR + rules + component names only (~3K tokens)
+  includeTree?: boolean;  // Include file tree (off by default)
+  xml?: boolean;          // Output in XML format for better AI parsing
 }
 
 export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
   const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns } = result;
-  const { compact = false, compress = false } = options;
+  const { compact = false, compress = false, minimal = false, includeTree = false, xml = false } = options;
+
+  // Minimal mode: ultra-compact output (~3K tokens)
+  if (minimal) {
+    return generateMinimalOutput(result, options);
+  }
+
+  // XML mode: structured output for better AI parsing
+  if (xml) {
+    return generateXmlOutput(result, options);
+  }
 
   const lines: string[] = [];
 
@@ -108,38 +121,73 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
   }
   lines.push("");
 
-  // File Tree Section (skip in compact/compress mode)
-  if (!compact && !compress && fileTree) {
+  // File Tree Section (only when --tree flag is used)
+  if (includeTree && fileTree) {
     lines.push(formatFileTree(fileTree));
   }
 
-  // Codebase Statistics Section (skip in compact/compress mode)
-  if (!compact && !compress && stats && stats.largestFiles.length > 0) {
-    lines.push("## Codebase Statistics");
-    lines.push("");
-    lines.push("### Largest Files");
-    lines.push("");
-    for (const file of stats.largestFiles) {
-      lines.push(`- \`${file.path}\` (${file.lines} lines)`);
-    }
-    lines.push("");
-  }
-
-  // Critical Rules - Always first and prominent
+  // Critical Rules with inline examples (moved anti-patterns here for better AI parsing)
   lines.push("## Critical Rules");
   lines.push("");
   lines.push("**These rules are NON-NEGOTIABLE:**");
   lines.push("");
-  lines.push("1. **USE EXISTING COMPONENTS** — Check the list below before creating ANYTHING new");
-  lines.push("2. **USE DESIGN TOKENS** — Never hardcode colors (`#fff`, `blue-500`), always use semantic tokens");
 
-  if (utilities.hasCn) {
-    lines.push(`3. **USE \`cn()\`** — Always use \`cn()\` for conditional classes: \`className={cn("base", condition && "conditional")}\``);
-  }
-  if (utilities.hasMode) {
-    lines.push(`4. **USE \`mode\`** — Import design system: \`import { mode } from "${utilities.modePath}"\``);
-  }
+  // Rule 1: Use existing components
+  lines.push("### 1. USE EXISTING COMPONENTS");
+  lines.push(`This project has ${components.length} components. Check the list below before creating anything new.`);
   lines.push("");
+  lines.push("```tsx");
+  lines.push("// WRONG");
+  lines.push(`<div className="rounded border p-4">...</div>`);
+  lines.push("");
+  lines.push("// RIGHT");
+  lines.push(`<Card><CardContent>...</CardContent></Card>`);
+  lines.push("```");
+  lines.push("");
+
+  // Rule 2: Use design tokens
+  lines.push("### 2. USE DESIGN TOKENS");
+  lines.push("Never hardcode colors. Use semantic tokens that work with theme switching.");
+  lines.push("");
+  lines.push("```tsx");
+  lines.push("// WRONG");
+  lines.push(`className="bg-blue-500 text-white"`);
+  lines.push(`style={{ color: "#3b82f6" }}`);
+  lines.push("");
+  lines.push("// RIGHT");
+  lines.push(`className="bg-primary text-primary-foreground"`);
+  lines.push("```");
+  lines.push("");
+
+  // Rule 3: cn() utility
+  if (utilities.hasCn) {
+    lines.push("### 3. USE `cn()` FOR CLASSES");
+    lines.push(`Import from \`${utilities.cnPath}\`. Handles conditional classes correctly.`);
+    lines.push("");
+    lines.push("```tsx");
+    lines.push("// WRONG");
+    lines.push(`className={"btn " + (active ? "btn-active" : "")}`);
+    lines.push("");
+    lines.push("// RIGHT");
+    lines.push(`className={cn("btn", active && "btn-active")}`);
+    lines.push("```");
+    lines.push("");
+  }
+
+  // Rule 4: mode design system
+  if (utilities.hasMode) {
+    lines.push(`### ${utilities.hasCn ? "4" : "3"}. USE \`mode\` DESIGN SYSTEM`);
+    lines.push(`Import from \`${utilities.modePath}\`. Provides theme-aware styling.`);
+    lines.push("");
+    lines.push("```tsx");
+    lines.push("// WRONG");
+    lines.push(`className="rounded-lg"`);
+    lines.push("");
+    lines.push("// RIGHT");
+    lines.push(`className={cn("...", mode.radius)}`);
+    lines.push("```");
+    lines.push("");
+  }
 
   // Extract rules from existing CLAUDE.md if present
   if (existingContext.hasClaudeMd && existingContext.claudeMdContent) {
@@ -513,9 +561,25 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
     }
   }
 
-  // Anti-Patterns Section (Common AI Mistakes)
-  if (!compress && antiPatterns && antiPatterns.patterns.length > 0) {
-    lines.push(formatAntiPatterns(antiPatterns));
+  // Anti-Patterns Section (additional patterns not covered in Critical Rules)
+  // Only show in full mode, and only framework-specific patterns
+  if (!compress && !compact && antiPatterns && antiPatterns.patterns.length > 0) {
+    const additionalPatterns = antiPatterns.patterns.filter(p =>
+      p.title.includes("Next.js") ||
+      p.title.includes("TypeScript") ||
+      p.title.includes("API") ||
+      p.title.includes("'use client'")
+    );
+    if (additionalPatterns.length > 0) {
+      lines.push("## Additional Guidelines");
+      lines.push("");
+      for (const pattern of additionalPatterns.slice(0, 5)) {
+        lines.push(`**${pattern.title}**`);
+        lines.push(`- Wrong: \`${pattern.wrong.split('\n')[0]}\``);
+        lines.push(`- Right: \`${pattern.right.split('\n')[0]}\``);
+        lines.push("");
+      }
+    }
   }
 
   // Commands Section
@@ -671,4 +735,226 @@ function groupRoutesByBasePath(routes: ApiRoute[]): Record<string, ApiRoute[]> {
   }
 
   return grouped;
+}
+
+/**
+ * Generate minimal output (~3K tokens)
+ * TL;DR + Rules with inline examples + Component names only
+ */
+function generateMinimalOutput(result: ScanResult, options: GeneratorOptions): string {
+  const { components, framework, utilities, hooks, apiRoutes, database, importGraph } = result;
+  const lines: string[] = [];
+
+  // Header
+  lines.push("# AGENTS.md");
+  lines.push("");
+  lines.push("> Minimal output • [agentsmith](https://github.com/jpoindexter/agentsmith)");
+  lines.push("");
+
+  // Quick Reference
+  lines.push("## Quick Reference");
+  lines.push("");
+  const stackParts: string[] = [framework.name];
+  if (framework.language === "TypeScript") stackParts.push("TypeScript");
+  if (framework.styling) stackParts.push(framework.styling);
+  lines.push(`**Stack**: ${stackParts.join(" + ")}`);
+  lines.push(`**Components**: ${components.length} — USE EXISTING`);
+  if (utilities.hasCn) lines.push(`**Utility**: \`cn()\` from \`${utilities.cnPath}\``);
+  if (utilities.hasMode) lines.push(`**Design**: \`mode\` from \`${utilities.modePath}\``);
+  if (database) lines.push(`**Database**: ${database.provider} (${database.models.length} models)`);
+  lines.push("");
+
+  // Rules (compact with inline examples)
+  lines.push("## Rules");
+  lines.push("");
+  lines.push("1. **USE EXISTING COMPONENTS** — Don't create new ones");
+  lines.push("   - WRONG: `<div className=\"rounded border\">` → RIGHT: `<Card>`");
+  lines.push("");
+  lines.push("2. **USE DESIGN TOKENS** — No hardcoded colors");
+  lines.push("   - WRONG: `bg-blue-500` → RIGHT: `bg-primary`");
+  lines.push("");
+  if (utilities.hasCn) {
+    lines.push("3. **USE `cn()`** — For conditional classes");
+    lines.push("   - WRONG: `\"btn \" + (x ? \"active\" : \"\")` → RIGHT: `cn(\"btn\", x && \"active\")`");
+    lines.push("");
+  }
+  if (framework.name === "Next.js") {
+    lines.push(`${utilities.hasCn ? "4" : "3"}. **NEXT.JS** — Use Link/Image, prefer Server Components`);
+    lines.push("");
+  }
+
+  // Components (names only, grouped)
+  lines.push("## Components");
+  lines.push("");
+  const grouped = groupComponentsByDirectory(components);
+  for (const [dir, comps] of Object.entries(grouped)) {
+    const groupName = formatDirectoryName(dir);
+    const names = comps.map(c => c.name).join(", ");
+    lines.push(`**${groupName}**: ${names}`);
+  }
+  lines.push("");
+
+  // Hooks (if any)
+  if (hooks.length > 0) {
+    lines.push("## Hooks");
+    lines.push("");
+    lines.push(hooks.map(h => `\`${h.name}\``).join(", "));
+    lines.push("");
+  }
+
+  // Hub files (most impactful)
+  if (importGraph && importGraph.hubFiles.length > 0) {
+    lines.push("## High-Impact Files");
+    lines.push("");
+    for (const hub of importGraph.hubFiles.slice(0, 5)) {
+      lines.push(`- \`${hub.file}\` (${hub.importedBy} dependents)`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Generate XML-structured output for better AI parsing
+ * Uses semantic XML tags that Claude was trained to understand
+ */
+function generateXmlOutput(result: ScanResult, options: GeneratorOptions): string {
+  const { components, tokens, framework, utilities, hooks, apiRoutes, database, existingContext, antiPatterns, importGraph } = result;
+  const lines: string[] = [];
+
+  lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+  lines.push('<agents-context version="1.0">');
+  lines.push('');
+
+  // Quick reference
+  lines.push('  <summary>');
+  const stackParts: string[] = [framework.name];
+  if (framework.language === "TypeScript") stackParts.push("TypeScript");
+  if (framework.styling) stackParts.push(framework.styling);
+  lines.push(`    <stack>${stackParts.join(" + ")}</stack>`);
+  lines.push(`    <components count="${components.length}">USE EXISTING - don't create new</components>`);
+  if (utilities.hasCn) lines.push(`    <utility name="cn" path="${utilities.cnPath}" />`);
+  if (utilities.hasMode) lines.push(`    <utility name="mode" path="${utilities.modePath}" />`);
+  if (database) lines.push(`    <database provider="${database.provider}" models="${database.models.length}" />`);
+  lines.push('  </summary>');
+  lines.push('');
+
+  // Critical rules with examples
+  lines.push('  <rules priority="critical">');
+  lines.push('');
+  lines.push('    <rule name="use-existing-components">');
+  lines.push(`      <description>This project has ${components.length} components. Check before creating new.</description>`);
+  lines.push('      <example type="wrong"><![CDATA[<div className="rounded border p-4">...</div>]]></example>');
+  lines.push('      <example type="right"><![CDATA[<Card><CardContent>...</CardContent></Card>]]></example>');
+  lines.push('    </rule>');
+  lines.push('');
+  lines.push('    <rule name="use-design-tokens">');
+  lines.push('      <description>Never hardcode colors. Use semantic tokens.</description>');
+  lines.push('      <example type="wrong"><![CDATA[className="bg-blue-500 text-white"]]></example>');
+  lines.push('      <example type="right"><![CDATA[className="bg-primary text-primary-foreground"]]></example>');
+  lines.push('    </rule>');
+  lines.push('');
+
+  if (utilities.hasCn) {
+    lines.push('    <rule name="use-cn-utility">');
+    lines.push(`      <description>Import from ${utilities.cnPath}. Use for conditional classes.</description>`);
+    lines.push('      <example type="wrong"><![CDATA[className={"btn " + (active ? "active" : "")}]]></example>');
+    lines.push('      <example type="right"><![CDATA[className={cn("btn", active && "active")}]]></example>');
+    lines.push('    </rule>');
+    lines.push('');
+  }
+
+  if (utilities.hasMode) {
+    lines.push('    <rule name="use-mode-design-system">');
+    lines.push(`      <description>Import from ${utilities.modePath}. Provides theme-aware styling.</description>`);
+    lines.push('      <example type="wrong"><![CDATA[className="rounded-lg"]]></example>');
+    lines.push('      <example type="right"><![CDATA[className={cn("...", mode.radius)}]]></example>');
+    lines.push('    </rule>');
+    lines.push('');
+  }
+
+  lines.push('  </rules>');
+  lines.push('');
+
+  // Components
+  lines.push(`  <components count="${components.length}">`);
+  const grouped = groupComponentsByDirectory(components);
+  for (const [dir, comps] of Object.entries(grouped)) {
+    const groupName = formatDirectoryName(dir);
+    lines.push(`    <group name="${escapeXml(groupName)}" count="${comps.length}">`);
+    for (const comp of comps) {
+      const propsAttr = comp.props && comp.props.length > 0 ? ` props="${escapeXml(comp.props.slice(0, 5).join(", "))}"` : '';
+      lines.push(`      <component name="${escapeXml(comp.name)}" path="${escapeXml(comp.importPath)}"${propsAttr} />`);
+    }
+    lines.push('    </group>');
+  }
+  lines.push('  </components>');
+  lines.push('');
+
+  // Hooks
+  if (hooks.length > 0) {
+    lines.push(`  <hooks count="${hooks.length}">`);
+    for (const hook of hooks) {
+      lines.push(`    <hook name="${escapeXml(hook.name)}" path="${escapeXml(hook.importPath)}"${hook.isClientOnly ? ' client-only="true"' : ''} />`);
+    }
+    lines.push('  </hooks>');
+    lines.push('');
+  }
+
+  // Hub files
+  if (importGraph && importGraph.hubFiles.length > 0) {
+    lines.push('  <hub-files description="Changes to these affect many files">');
+    for (const hub of importGraph.hubFiles.slice(0, 8)) {
+      lines.push(`    <file path="${escapeXml(hub.file)}" dependents="${hub.importedBy}" />`);
+    }
+    lines.push('  </hub-files>');
+    lines.push('');
+  }
+
+  // API routes
+  if (apiRoutes.length > 0) {
+    lines.push(`  <api-routes count="${apiRoutes.length}">`);
+    for (const route of apiRoutes.slice(0, 20)) {
+      const methods = route.methods.join(",");
+      lines.push(`    <route path="${escapeXml(route.path)}" methods="${methods}"${route.isProtected ? ' protected="true"' : ''} />`);
+    }
+    lines.push('  </api-routes>');
+    lines.push('');
+  }
+
+  // Database models
+  if (database && database.models.length > 0) {
+    lines.push(`  <database provider="${database.provider}" models="${database.models.length}">`);
+    for (const model of database.models.slice(0, 15)) {
+      const fields = model.fields.slice(0, 6).join(", ");
+      lines.push(`    <model name="${escapeXml(model.name)}" fields="${escapeXml(fields)}" />`);
+    }
+    lines.push('  </database>');
+    lines.push('');
+  }
+
+  // Design tokens summary
+  if (Object.keys(tokens.colors).length > 0) {
+    lines.push('  <design-tokens>');
+    lines.push('    <colors>bg-background, bg-card, bg-muted, bg-primary, bg-secondary, bg-destructive</colors>');
+    lines.push('    <text>text-foreground, text-muted-foreground, text-primary-foreground</text>');
+    lines.push('    <borders>border-border, border-primary</borders>');
+    lines.push('    <forbidden>bg-white, bg-black, bg-gray-*, #hexvalues</forbidden>');
+    lines.push('  </design-tokens>');
+    lines.push('');
+  }
+
+  lines.push('</agents-context>');
+
+  return lines.join("\n");
+}
+
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
