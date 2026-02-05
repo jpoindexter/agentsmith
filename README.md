@@ -42,8 +42,11 @@ npx agentsmith
   ✓ Found existing CLAUDE.md
   ✓ Found .ai/ folder (12 files)
   ✓ Found prisma schema (28 models)
+  ✓ Scanned 1572 files (11.0 MB, 365,599 lines)
+  ✓ Found 17 barrel exports
 
   ✓ Generated AGENTS.md
+    ~9.9K tokens (8% of 128K context)
 ```
 
 ## Install
@@ -73,6 +76,15 @@ agentsmith --output CONTEXT.md
 
 # Force overwrite existing file
 agentsmith --force
+
+# Generate compact output (fewer details, ~20% smaller)
+agentsmith --compact
+
+# Also generate JSON index for programmatic access
+agentsmith --json
+
+# Combine options
+agentsmith --compact --json --force
 ```
 
 ## Configuration
@@ -92,34 +104,82 @@ Create `agentsmith.config.json` in your project root for customization:
 
 | Scanner | What it finds |
 |---------|---------------|
-| **Components** | React/Vue/Svelte components with exports, props, and descriptions |
+| **Components** | React components with exports, props, and JSDoc descriptions |
 | **Variants** | CVA variant options (Button: default, destructive, etc.) |
+| **Dependencies** | Component imports (radix, design system, utilities) |
+| **Barrels** | Index.ts re-exports for suggested import paths |
 | **Tokens** | CSS variables and Tailwind config |
 | **Hooks** | Custom hooks with client-only detection |
-| **API Routes** | Next.js routes with methods and auth status |
+| **API Routes** | Next.js routes grouped by path, with methods and auth status |
 | **Database** | Prisma models with fields and relations |
 | **Environment** | Required/optional env vars from .env.example |
 | **Patterns** | react-hook-form, Zod, Zustand, tRPC, testing libs |
 | **Utilities** | cn(), mode/design-system detection |
 | **Framework** | Next.js, Remix, Vite with version and router type |
+| **Statistics** | Total files, lines, size, largest files |
 | **Existing docs** | CLAUDE.md, .ai/ folder, .cursorrules |
 
 ## Output
 
 The generated AGENTS.md includes:
 
-- **Project Overview** - Framework, language, styling, detected libraries
+- **Project Overview** - Framework, language, styling, file count, line count
+- **Codebase Statistics** - Largest files in the project
 - **Critical Rules** - Non-negotiable rules (use existing components, use tokens)
 - **Components** - Full inventory with props and JSDoc descriptions
+- **Preferred Imports** - Barrel imports for cleaner code
+- **Component Dependencies** - What each component imports
 - **Component Variants** - CVA options for each component
 - **Custom Hooks** - With client-only markers
-- **API Routes** - Methods and auth status (🔒 for protected)
+- **API Routes** - Grouped by path (Users, Auth, Admin, etc.) with methods and auth status
 - **Database Models** - Prisma models with fields and relations
 - **Environment Variables** - Required vs optional
 - **Code Patterns** - Detected patterns with usage examples
 - **Design Tokens** - Color tokens with usage guidance
 - **Commands** - npm scripts for dev, build, test, db, etc.
-- **Additional Docs** - References to CLAUDE.md, .ai/ folder
+
+## Token Counting
+
+agentsmith estimates the token count of generated output:
+
+```bash
+agentsmith --dry-run
+
+  ✓ Generated AGENTS.md
+    ~9.9K tokens (8% of 128K context)
+```
+
+This helps you understand how much of your AI's context window the file uses.
+
+## Compact Mode
+
+For large projects, use `--compact` to reduce output size:
+
+```bash
+agentsmith --compact
+
+# Normal:  ~9.9K tokens
+# Compact: ~7.8K tokens (21% smaller)
+```
+
+Compact mode:
+- Limits props to top 5 per component
+- Skips JSDoc descriptions
+- Omits codebase statistics
+- Skips dependency graph
+
+## JSON Index
+
+Generate a machine-readable index alongside AGENTS.md:
+
+```bash
+agentsmith --json
+
+  ✓ Generated AGENTS.md
+  ✓ Generated AGENTS.index.json
+```
+
+The JSON index includes structured data for all components, hooks, routes, and models - useful for building tooling on top of agentsmith.
 
 ## Example output
 
@@ -134,6 +194,14 @@ The generated AGENTS.md includes:
 | **Language** | TypeScript |
 | **UI Library** | shadcn/ui (26 Radix packages) |
 | **Components** | 279 |
+| **Codebase** | 1,572 files, 365,599 lines |
+
+## Codebase Statistics
+
+### Largest Files
+
+- `src/generated/prisma/models/User.ts` (6088 lines)
+- `src/components/ui/form.tsx` (847 lines)
 
 ## Critical Rules
 
@@ -149,16 +217,32 @@ The generated AGENTS.md includes:
   - Props: variant, size, asChild, disabled
   - Variants: default, destructive, outline, ghost, link
 
+## Preferred Imports
+
+Use barrel imports instead of importing from individual files:
+
+```typescript
+import { Button, Card, Input } from "@/components/ui";
+```
+
+## API Routes
+
+### Auth
+
+- `POST` `/api/auth/login`
+- `POST` `/api/auth/register`
+- `GET` `/api/auth/verify-email`
+
+### Users
+
+- `GET` `/api/users` 🔒
+- `POST` `/api/users` 🔒
+- `DELETE` `/api/users/:id` 🔒
+
 ## Database Models
 
 - **User** — id, email, name, createdAt
   - Relations: posts, sessions
-
-## API Routes
-
-- `GET` `/api/users` 🔒
-- `POST` `/api/auth/login`
-...
 ```
 
 ## Why?
