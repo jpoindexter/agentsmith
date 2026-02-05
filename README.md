@@ -44,9 +44,12 @@ npx agentsmith
   ✓ Found prisma schema (28 models)
   ✓ Scanned 1572 files (11.0 MB, 365,599 lines)
   ✓ Found 17 barrel exports
+  ✓ Found 15 hub files (most imported)
+  ✓ Found 20 Props types
+  ✓ Found 40 test files (12% component coverage)
 
   ✓ Generated AGENTS.md
-    ~9.9K tokens (8% of 128K context)
+    ~11K tokens (9% of 128K context)
 ```
 
 ## Install
@@ -76,68 +79,117 @@ agentsmith --output CONTEXT.md
 
 # Force overwrite existing file
 agentsmith --force
+```
 
-# Generate compact output (fewer details, ~20% smaller)
+## Output Modes
+
+```bash
+# Default - comprehensive output (~11K tokens)
+agentsmith
+
+# Compact - fewer details (~20% smaller)
 agentsmith --compact
 
-# Also generate JSON index for programmatic access
-agentsmith --json
-
-# Generate compressed output (signatures only, ~40% smaller)
+# Compress - signatures only (~40% smaller)
 agentsmith --compress
 
-# Check for secrets before generating
-agentsmith --check-secrets
+# Minimal - ultra-compact (~3K tokens)
+agentsmith --minimal
 
-# Include recent git commits
-agentsmith --include-git-log
+# XML format (industry standard, matches Repomix)
+agentsmith --xml
 
-# Output as XML or JSON
-agentsmith --format xml
-agentsmith --format json
-
-# Analyze a remote GitHub repository
-agentsmith --remote https://github.com/user/repo
-
-# Watch mode - auto-regenerate on file changes
-agentsmith --watch
-
-# Combine options
-agentsmith --compact --json --force
+# Include file tree visualization
+agentsmith --tree
 ```
+
+## New in v1.0.0
+
+```bash
+# Copy output to clipboard
+agentsmith --copy
+
+# Include uncommitted git changes
+agentsmith --include-diffs
+
+# Split large repos into chunks
+agentsmith --split-output 100kb   # Creates AGENTS-001.md, AGENTS-002.md, etc.
+
+# Include security audit (npm audit)
+agentsmith --security
+
+# Monorepo support - generate for each package
+agentsmith --monorepo
+
+# Start as MCP server for AI tool integration
+agentsmith --mcp
+```
+
+## All Options
+
+| Flag | Description |
+|------|-------------|
+| `-o, --output <file>` | Output file path (default: AGENTS.md) |
+| `--dry-run` | Preview without writing file |
+| `--force` | Overwrite existing AGENTS.md |
+| `--compact` | Fewer details, ~20% smaller |
+| `--compress` | Signatures only, ~40% smaller |
+| `--minimal` | Ultra-compact, ~3K tokens |
+| `--xml` | XML format output |
+| `--tree` | Include file tree |
+| `--json` | Also generate AGENTS.index.json |
+| `--copy` | Copy output to clipboard |
+| `--include-diffs` | Include uncommitted git changes |
+| `--include-git-log` | Include recent commits |
+| `--split-output <size>` | Split into chunks (e.g., 100kb) |
+| `--security` | Include npm audit results |
+| `--monorepo` | Generate for each workspace package |
+| `--mcp` | Start as MCP server |
+| `--remote <url>` | Analyze a GitHub repository |
+| `--watch` | Auto-regenerate on file changes |
+| `--check-secrets` | Scan for secrets before output |
+
+## MCP Server Mode
+
+agentsmith can run as an MCP (Model Context Protocol) server for AI tool integration:
+
+```bash
+agentsmith --mcp
+```
+
+Exposes these tools to AI assistants:
+- `pack_codebase` - Generate AGENTS.md for a directory
+- `read_agents` - Read existing AGENTS.md
+- `search_components` - Search components by name
+- `get_component_info` - Get detailed component info with source
 
 ## Configuration
 
-Create `agentsmith.config.json` in your project root for customization:
+Create `agentsmith.config.json` in your project root:
 
 ```json
 {
   "output": "AGENTS.md",
-  "showProps": true,
-  "showDescriptions": true,
   "exclude": [
     "**/test/**",
     "**/stories/**",
-    "**/fixtures/**",
-    "**/__mocks__/**"
+    "**/fixtures/**"
   ]
 }
 ```
-
-The `exclude` patterns are added to the default exclusions and apply to component scanning.
 
 ## What it scans
 
 | Scanner | What it finds |
 |---------|---------------|
-| **Components** | React components with exports, props, and JSDoc descriptions |
+| **Components** | React components with exports, props, JSDoc, complexity metrics |
 | **Variants** | CVA variant options (Button: default, destructive, etc.) |
 | **Dependencies** | Component imports (radix, design system, utilities) |
 | **Barrels** | Index.ts re-exports for suggested import paths |
 | **Tokens** | CSS variables and Tailwind config |
 | **Hooks** | Custom hooks with client-only detection |
-| **API Routes** | Next.js routes grouped by path, with methods and auth status |
-| **Database** | Prisma models with fields and relations |
+| **API Routes** | Next.js routes with methods and auth status |
+| **Database** | Prisma and Drizzle models with fields and relations |
 | **Environment** | Required/optional env vars from .env.example |
 | **Patterns** | react-hook-form, Zod, Zustand, tRPC, testing libs |
 | **Utilities** | cn(), mode/design-system detection |
@@ -145,228 +197,85 @@ The `exclude` patterns are added to the default exclusions and apply to componen
 | **Statistics** | Total files, lines, size, largest files |
 | **Existing docs** | CLAUDE.md, .ai/ folder, .cursorrules |
 | **File Tree** | Project structure visualization |
-| **Import Graph** | Hub files (most imported), circular dependencies |
-| **TypeScript Types** | Props interfaces, API types, model types |
-| **Anti-Patterns** | Common AI mistakes with WRONG/RIGHT examples |
+| **Import Graph** | Hub files, circular deps, unused components |
+| **TypeScript** | Props interfaces, API types, model types |
+| **Tests** | Test framework detection, coverage mapping |
+| **Security** | npm audit vulnerabilities, outdated packages |
 
 ## Output
 
 The generated AGENTS.md includes:
 
-- **Project Overview** - Framework, language, styling, file count, line count
-- **Project Structure** - File tree visualization
-- **Codebase Statistics** - Largest files in the project
-- **Critical Rules** - Non-negotiable rules (use existing components, use tokens)
-- **Components** - Full inventory with props and JSDoc descriptions
-- **Most Imported Files** - Hub files that have wide impact when changed
-- **Key Dependencies** - Most-used external packages
-- **Circular Dependencies** - Warnings about problematic imports
+- **TL;DR** - Stack, component count, key imports, high-impact files
+- **Getting Started** - Auto-generated setup instructions
+- **Project Overview** - Framework, language, styling, statistics
+- **Critical Rules** - With WRONG/RIGHT code examples
+- **Components** - Full inventory grouped by category
+- **Hub Files** - Most imported files (changes have wide impact)
+- **Unused Components** - Potentially dead code warnings
 - **Preferred Imports** - Barrel imports for cleaner code
-- **Component Props Types** - TypeScript interfaces for component props
-- **Component Dependencies** - What each component imports
-- **Component Variants** - CVA options for each component
 - **Custom Hooks** - With client-only markers
-- **API Routes** - Grouped by path (Users, Auth, Admin, etc.) with methods and auth status
-- **Database Models** - Prisma models with fields and relations
+- **API Routes** - Grouped by path with methods and auth
+- **Database Models** - Fields and relations
 - **Environment Variables** - Required vs optional
-- **Common AI Mistakes** - Anti-patterns with WRONG/RIGHT code examples
-- **Code Patterns** - Detected patterns with usage examples
+- **Code Patterns** - Detected patterns with examples
 - **Design Tokens** - Color tokens with usage guidance
-- **Commands** - npm scripts for dev, build, test, db, etc.
-
-## Token Counting
-
-agentsmith estimates the token count of generated output:
-
-```bash
-agentsmith --dry-run
-
-  ✓ Generated AGENTS.md
-    ~9.9K tokens (8% of 128K context)
-```
-
-This helps you understand how much of your AI's context window the file uses.
-
-## Compact Mode
-
-For large projects, use `--compact` to reduce output size:
-
-```bash
-agentsmith --compact
-
-# Normal:  ~9.9K tokens
-# Compact: ~7.8K tokens (21% smaller)
-```
-
-Compact mode:
-- Limits props to top 5 per component
-- Skips JSDoc descriptions
-- Omits codebase statistics
-- Skips dependency graph
-
-## Compress Mode
-
-For AI tools with smaller context windows, use `--compress` to extract signatures only:
-
-```bash
-agentsmith --compress
-
-# Normal:  ~9.9K tokens
-# Compress: ~6.3K tokens (36% smaller)
-```
-
-Compress mode keeps component names and props but strips implementation details.
-
-## Watch Mode
-
-Keep AGENTS.md updated automatically during development:
-
-```bash
-agentsmith --watch
-
-  ✓ Generated AGENTS.md
-  👀 Watching for changes... (Ctrl+C to stop)
-```
-
-Watches `src/`, `components/`, and `lib/` directories. Regenerates when files change.
-
-## Remote Repository Analysis
-
-Analyze any public GitHub repository without cloning:
-
-```bash
-agentsmith --remote https://github.com/shadcn/ui
-
-  Cloning https://github.com/shadcn/ui...
-  ✓ Cloned repository
-
-  Scanning https://github.com/shadcn/ui...
-  ✓ Found 42 components
-  ...
-
-  ✓ Generated AGENTS.md
-```
-
-The AGENTS.md is generated in your current directory. The cloned repo is automatically cleaned up.
-
-## Secret Detection
-
-Before sharing AGENTS.md, scan for accidentally included secrets:
-
-```bash
-agentsmith --check-secrets
-
-  ⚠ Found 2 potential secrets:
-    - AWS Secret Key: AKIA**************** (line 234)
-    - Database URL: postgres://user:**** (line 456)
-
-  Review before sharing publicly.
-```
-
-Detects: AWS keys, GitHub tokens, Stripe keys, database URLs, JWTs, and more.
-
-## Git History
-
-Include recent commits in the output:
-
-```bash
-agentsmith --include-git-log
-
-  ✓ Found 10 recent commits
-```
-
-Adds a "Recent Changes" section with commit hash, date, author, and message.
-
-## Output Formats
-
-Generate in different formats:
-
-```bash
-# Markdown (default)
-agentsmith
-
-# XML for tools that prefer structured data
-agentsmith --format xml
-
-# JSON for programmatic access
-agentsmith --format json
-```
-
-## JSON Index
-
-Generate a machine-readable index alongside AGENTS.md:
-
-```bash
-agentsmith --json
-
-  ✓ Generated AGENTS.md
-  ✓ Generated AGENTS.index.json
-```
-
-The JSON index includes structured data for all components, hooks, routes, and models - useful for building tooling on top of agentsmith.
+- **Commands** - npm scripts
+- **Security** - Vulnerabilities and outdated packages (with --security)
 
 ## Example output
 
 ```markdown
 # AGENTS.md
 
-## Project Overview
+> Auto-generated by agentsmith
 
-| | |
-|---|---|
-| **Framework** | Next.js 16 (App Router) |
-| **Language** | TypeScript |
-| **UI Library** | shadcn/ui (26 Radix packages) |
-| **Components** | 279 |
-| **Codebase** | 1,572 files, 365,599 lines |
+## TL;DR
 
-## Codebase Statistics
+- **Stack**: Next.js 16.0.10 + TypeScript 5 + Tailwind 4.0.9 + shadcn/ui
+- **Components**: 279 total — USE EXISTING, don't create new
+- **Key imports**: `cn()` from `@/lib/utils`, `mode` from `@/design-system`
+- **High-impact files**: design-system/index, utils, button, card
+- **Database**: prisma with 28 models
+- **API**: 46 routes (31 protected)
 
-### Largest Files
+## Getting Started
 
-- `src/generated/prisma/models/User.ts` (6088 lines)
-- `src/components/ui/form.tsx` (847 lines)
+```bash
+npm install
+
+# Set up environment
+cp .env.example .env.local
+
+# Database setup
+npm run db:push
+npm run db:seed
+
+# Start development
+npm run dev
+```
 
 ## Critical Rules
 
-1. **USE EXISTING COMPONENTS** — Check the list below before creating ANYTHING new
-2. **USE DESIGN TOKENS** — Never hardcode colors, use semantic tokens
-3. **USE `cn()`** — Always use cn() for conditional classes
+### 1. USE EXISTING COMPONENTS
 
-## Components
+```tsx
+// WRONG
+<div className="rounded border p-4">...</div>
 
-### UI Components (62)
-
-- `Button` — `@/components/ui/button`
-  - Props: variant, size, asChild, disabled
-  - Variants: default, destructive, outline, ghost, link
-
-## Preferred Imports
-
-Use barrel imports instead of importing from individual files:
-
-```typescript
-import { Button, Card, Input } from "@/components/ui";
+// RIGHT
+<Card><CardContent>...</CardContent></Card>
 ```
 
-## API Routes
+### 2. USE DESIGN TOKENS
 
-### Auth
+```tsx
+// WRONG
+className="bg-blue-500 text-white"
 
-- `POST` `/api/auth/login`
-- `POST` `/api/auth/register`
-- `GET` `/api/auth/verify-email`
-
-### Users
-
-- `GET` `/api/users` 🔒
-- `POST` `/api/users` 🔒
-- `DELETE` `/api/users/:id` 🔒
-
-## Database Models
-
-- **User** — id, email, name, createdAt
-  - Relations: posts, sessions
+// RIGHT
+className="bg-primary text-primary-foreground"
+```
 ```
 
 ## Why?
@@ -385,11 +294,13 @@ With AGENTS.md:
 
 ## Comparison
 
-| Approach | Effort | Coverage |
-|----------|--------|----------|
-| Write AGENTS.md manually | High | Whatever you remember |
-| Ask AI to scaffold it | Medium | Basic structure |
-| **Run agentsmith** | Zero | Comprehensive scan |
+| Tool | Focus | Approach |
+|------|-------|----------|
+| **agentsmith** | AGENTS.md generation | Scans codebase, generates context |
+| Repomix | Code packing | Packs files into single XML |
+| Code2Prompt | Prompt building | Builds prompts from code |
+
+agentsmith is specifically designed for the AGENTS.md standard with opinionated rules about component reuse and design tokens.
 
 ## Works great with
 
