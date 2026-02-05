@@ -39,10 +39,17 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
   lines.push("## TL;DR");
   lines.push("");
 
-  // Stack line
-  const stackParts: string[] = [framework.name];
-  if (framework.language === "TypeScript") stackParts.push("TypeScript");
-  if (framework.styling) stackParts.push(framework.styling);
+  // Stack line with versions
+  const stackParts: string[] = [];
+  if (framework.name !== "Unknown") {
+    stackParts.push(framework.version ? `${framework.name} ${framework.version}` : framework.name);
+  }
+  if (framework.language === "TypeScript") {
+    stackParts.push(framework.versions?.typescript ? `TypeScript ${framework.versions.typescript}` : "TypeScript");
+  }
+  if (framework.styling) {
+    stackParts.push(framework.versions?.tailwindcss ? `Tailwind ${framework.versions.tailwindcss}` : framework.styling);
+  }
   if (utilities.hasShadcn) stackParts.push("shadcn/ui");
   lines.push(`- **Stack**: ${stackParts.join(" + ")}`);
 
@@ -86,6 +93,12 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
   lines.push("");
   lines.push("**Rules**: Use design tokens (not hardcoded colors), use `cn()` for classes, check existing components first");
   lines.push("");
+
+  // Getting Started Section (auto-generated setup guide)
+  const gettingStarted = generateGettingStarted(result);
+  if (gettingStarted) {
+    lines.push(gettingStarted);
+  }
 
   // Project Overview
   lines.push("## Project Overview");
@@ -947,4 +960,71 @@ function escapeXml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+/**
+ * Generate Getting Started section based on detected patterns
+ */
+function generateGettingStarted(result: ScanResult): string | null {
+  const { commands, database, envVars, framework } = result;
+  const steps: string[] = [];
+
+  // 1. Install dependencies
+  steps.push("npm install");
+
+  // 2. Environment setup (if env vars detected)
+  if (envVars.length > 0) {
+    steps.push("");
+    steps.push("# Set up environment");
+    steps.push("cp .env.example .env.local");
+    steps.push("# Edit .env.local with your values");
+  }
+
+  // 3. Database setup (if database detected)
+  if (database) {
+    steps.push("");
+    steps.push("# Database setup");
+    if (database.provider === "prisma") {
+      if (commands.db?.["db:push"]) {
+        steps.push("npm run db:push");
+      } else if (commands.db?.push) {
+        steps.push("npm run db:push");
+      } else {
+        steps.push("npx prisma db push");
+      }
+      if (commands.db?.seed || commands.db?.["db:seed"]) {
+        steps.push("npm run db:seed    # Optional: seed test data");
+      }
+    } else if (database.provider === "drizzle") {
+      if (commands.db?.push) {
+        steps.push("npm run db:push");
+      } else {
+        steps.push("npx drizzle-kit push");
+      }
+    }
+  }
+
+  // 4. Dev server
+  steps.push("");
+  steps.push("# Start development");
+  if (commands.dev) {
+    steps.push("npm run dev");
+  } else {
+    steps.push("npm run dev");
+  }
+
+  // Only generate if we have meaningful content
+  if (steps.length <= 3) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  lines.push("## Getting Started");
+  lines.push("");
+  lines.push("```bash");
+  lines.push(...steps);
+  lines.push("```");
+  lines.push("");
+
+  return lines.join("\n");
 }

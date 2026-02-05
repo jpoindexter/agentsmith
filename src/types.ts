@@ -1,3 +1,12 @@
+export interface ComponentComplexity {
+  propCount: number;
+  importCount: number;
+  lineCount: number;
+  hasState: boolean;
+  hasEffects: boolean;
+  hasContext: boolean;
+}
+
 export interface Component {
   name: string;
   path: string;
@@ -5,6 +14,7 @@ export interface Component {
   exports: string[];
   props?: string[];
   description?: string;
+  complexity?: ComponentComplexity;
 }
 
 export interface Tokens {
@@ -20,6 +30,13 @@ export interface Framework {
   router?: string;
   language: string;
   styling?: string;
+  versions?: {
+    react?: string;
+    typescript?: string;
+    tailwindcss?: string;
+    prisma?: string;
+    node?: string;
+  };
 }
 
 export interface Hook {
@@ -184,6 +201,14 @@ export interface AntiPatternsResult {
   warnings: string[];
 }
 
+export interface TestCoverage {
+  testFramework: "vitest" | "jest" | "playwright" | "testing-library" | "none";
+  testFiles: string[];
+  testedComponents: string[];
+  untestedComponents: string[];
+  coverage: number;
+}
+
 export interface ScanResult {
   components: Component[];
   tokens: Tokens;
@@ -204,4 +229,5 @@ export interface ScanResult {
   importGraph?: ImportGraph;
   typeExports?: TypeScanResult;
   antiPatterns?: AntiPatternsResult;
+  testCoverage?: TestCoverage;
 }

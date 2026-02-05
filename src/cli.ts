@@ -17,15 +17,17 @@ import { scanDatabase } from "./scanners/database.js";
 import { scanStats, formatBytes } from "./scanners/stats.js";
 import { scanBarrels } from "./scanners/barrels.js";
 import { scanDependencies } from "./scanners/dependencies.js";
-import { scanGitLog, formatGitLog } from "./scanners/git.js";
+import { scanGitLog, formatGitLog, getGitDiff, formatGitDiff } from "./scanners/git.js";
 import { scanFileTree, formatFileTree } from "./scanners/file-tree.js";
 import { scanImports, formatImportGraph } from "./scanners/imports.js";
 import { scanTypes, formatTypes } from "./scanners/types.js";
 import { generateAntiPatterns, formatAntiPatterns } from "./scanners/anti-patterns.js";
+import { scanTestCoverage } from "./scanners/tests.js";
 import { generateAgentsMd } from "./generator.js";
 import { generateAgentsIndex } from "./json-generator.js";
 import { estimateTokens, formatTokens, getContextUsage } from "./utils/tokens.js";
 import { detectSecrets } from "./utils/secrets.js";
+import { parseSize, splitContent, getSplitFilenames } from "./utils/split.js";
 import { loadConfig } from "./config.js";
 import { writeFileSync, existsSync, rmSync, watch } from "fs";
 import { join } from "path";
@@ -47,8 +49,11 @@ cli
   .option("--compress", "Extract signatures only (reduce tokens by ~40%)")
   .option("--minimal", "Ultra-compact output (~3K tokens) - TL;DR + rules + component names")
   .option("--tree", "Include file tree in output (off by default)")
+  .option("--copy", "Copy output to clipboard")
+  .option("--include-diffs", "Include uncommitted git changes")
+  .option("--split-output <size>", "Split output into chunks (e.g., 100kb, 500kb)")
   .option("--watch", "Watch for file changes and regenerate automatically")
-  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; xml?: boolean; remote?: string; compress?: boolean; minimal?: boolean; tree?: boolean; watch?: boolean }) => {
+  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; xml?: boolean; remote?: string; compress?: boolean; minimal?: boolean; tree?: boolean; copy?: boolean; includeDiffs?: boolean; splitOutput?: string; watch?: boolean }) => {
     let targetDir = dir || process.cwd();
     let isRemote = false;
     let tempDir = "";
@@ -111,6 +116,9 @@ cli
       // Generate anti-patterns based on detected features
       const antiPatterns = generateAntiPatterns(framework, utilities, tokens, components, utilities.hasMode);
 
+      // Scan test coverage (needs components list)
+      const testCoverage = await scanTestCoverage(targetDir, components);
+
       // Report findings
       console.log(pc.green(`  ✓ Found ${components.length} components`));
       if (variants.length > 0) {
@@ -160,6 +168,9 @@ cli
       if (typeExports.propsTypes.length > 0) {
         console.log(pc.green(`  ✓ Found ${typeExports.propsTypes.length} Props types`));
       }
+      if (testCoverage.testFiles.length > 0) {
+        console.log(pc.green(`  ✓ Found ${testCoverage.testFiles.length} test files (${testCoverage.coverage}% component coverage)`));
+      }
 
       // Scan git log if requested
       let gitInfo = null;
@@ -179,13 +190,22 @@ cli
 
       // Generate AGENTS.md content
       let content = generateAgentsMd(
-        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns },
+        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage },
         { compact: options.compact, compress: options.compress, minimal: options.minimal, includeTree: options.tree, xml: options.xml }
       );
 
       // Append git log if included
       if (gitInfo) {
         content += "\n" + formatGitLog(gitInfo);
+      }
+
+      // Append git diff if included
+      if (options.includeDiffs) {
+        const diff = getGitDiff(targetDir);
+        if (diff) {
+          content += "\n" + formatGitDiff(diff);
+          console.log(pc.green(`  ✓ Included uncommitted changes (${(diff.length / 1024).toFixed(1)}KB)`));
+        }
       }
 
       // Check for secrets if requested
@@ -215,7 +235,21 @@ cli
 
       if (options.dryRun) {
         console.log(pc.yellow("\n  Dry run - would generate:\n"));
-        console.log(pc.dim("  " + finalOutputFile));
+        if (options.splitOutput) {
+          try {
+            const maxBytes = parseSize(options.splitOutput);
+            const { chunks } = splitContent(finalContent, maxBytes);
+            const filenames = getSplitFilenames(finalOutputFile, chunks.length);
+            for (const filename of filenames) {
+              console.log(pc.dim("  " + filename));
+            }
+          } catch (err) {
+            console.log(pc.dim("  " + finalOutputFile));
+            console.log(pc.yellow(`  ⚠ Split error: ${err instanceof Error ? err.message : 'unknown'}`));
+          }
+        } else {
+          console.log(pc.dim("  " + finalOutputFile));
+        }
         if (options.json && !options.xml) {
           console.log(pc.dim("  " + outputFile.replace(".md", ".index.json")));
         }
@@ -223,14 +257,38 @@ cli
       } else {
         // Write to original directory if remote, otherwise target directory
         const writeDir = isRemote ? process.cwd() : targetDir;
-        const outputPath = join(writeDir, finalOutputFile);
-        writeFileSync(outputPath, finalContent, "utf-8");
-        console.log(pc.green(`\n  ✓ Generated ${finalOutputFile}`));
+
+        // Handle --split-output
+        if (options.splitOutput) {
+          try {
+            const maxBytes = parseSize(options.splitOutput);
+            const { chunks, totalSize } = splitContent(finalContent, maxBytes);
+            const filenames = getSplitFilenames(finalOutputFile, chunks.length);
+
+            console.log(pc.green(`\n  ✓ Split output into ${chunks.length} files:`));
+            for (let i = 0; i < chunks.length; i++) {
+              const outputPath = join(writeDir, filenames[i]);
+              writeFileSync(outputPath, chunks[i], "utf-8");
+              const chunkTokens = estimateTokens(chunks[i]);
+              console.log(pc.green(`    ✓ ${filenames[i]} (~${formatTokens(chunkTokens)} tokens)`));
+            }
+          } catch (err) {
+            console.log(pc.red(`\n  ✗ Split error: ${err instanceof Error ? err.message : 'unknown'}`));
+            // Fall back to single file
+            const outputPath = join(writeDir, finalOutputFile);
+            writeFileSync(outputPath, finalContent, "utf-8");
+            console.log(pc.green(`  ✓ Generated ${finalOutputFile} (single file fallback)`));
+          }
+        } else {
+          const outputPath = join(writeDir, finalOutputFile);
+          writeFileSync(outputPath, finalContent, "utf-8");
+          console.log(pc.green(`\n  ✓ Generated ${finalOutputFile}`));
+        }
 
         // Generate JSON index if requested (not with --xml)
         if (options.json && !options.xml) {
           const jsonContent = generateAgentsIndex(
-            { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns },
+            { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage },
             content
           );
           const jsonPath = join(writeDir, outputFile.replace(".md", ".index.json"));
@@ -239,6 +297,17 @@ cli
         }
 
         console.log(pc.dim(`    ~${formatTokens(tokenCount)} tokens (${contextUsage}% of 128K context)\n`));
+
+        // Copy to clipboard if requested
+        if (options.copy) {
+          try {
+            const { default: clipboard } = await import('clipboardy');
+            await clipboard.write(finalContent);
+            console.log(pc.green(`  ✓ Copied to clipboard`));
+          } catch (err) {
+            console.log(pc.yellow(`  ⚠ Could not copy to clipboard: ${err instanceof Error ? err.message : 'unknown error'}`));
+          }
+        }
       }
 
       // Clean up temp directory if remote

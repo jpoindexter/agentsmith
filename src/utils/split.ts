@@ -1,0 +1,100 @@
+/**
+ * Split content into chunks based on size limit
+ * Splits at section boundaries (## headers) when possible
+ */
+
+export interface SplitResult {
+  chunks: string[];
+  totalSize: number;
+}
+
+/**
+ * Parse size string to bytes (e.g., "100kb" -> 102400)
+ */
+export function parseSize(size: string): number {
+  const match = size.match(/^(\d+(?:\.\d+)?)\s*(kb|mb|k|m)?$/i);
+  if (!match) {
+    throw new Error(`Invalid size format: "${size}". Use format like "100kb" or "1mb"`);
+  }
+
+  const value = parseFloat(match[1]);
+  const unit = (match[2] || "").toLowerCase();
+
+  switch (unit) {
+    case "kb":
+    case "k":
+      return Math.floor(value * 1024);
+    case "mb":
+    case "m":
+      return Math.floor(value * 1024 * 1024);
+    default:
+      return Math.floor(value); // bytes
+  }
+}
+
+/**
+ * Split content into chunks at section boundaries
+ */
+export function splitContent(content: string, maxBytes: number): SplitResult {
+  const chunks: string[] = [];
+  const totalSize = Buffer.byteLength(content, "utf-8");
+
+  // If content fits in one chunk, return as-is
+  if (totalSize <= maxBytes) {
+    return { chunks: [content], totalSize };
+  }
+
+  // Split by ## headers
+  const sections = content.split(/(?=^## )/m);
+
+  // Find header section (everything before first ##)
+  const headerMatch = content.match(/^([\s\S]*?)(?=^## )/m);
+  const header = headerMatch ? headerMatch[1] : "";
+  const headerSize = Buffer.byteLength(header, "utf-8");
+
+  // Build chunks
+  let currentChunk = header;
+  let currentSize = headerSize;
+  let chunkIndex = 1;
+
+  for (const section of sections) {
+    // Skip empty sections or the header (already added)
+    if (!section.trim() || !section.startsWith("## ")) continue;
+
+    const sectionSize = Buffer.byteLength(section, "utf-8");
+
+    // If adding this section exceeds limit, start a new chunk
+    if (currentSize + sectionSize > maxBytes && currentChunk.trim()) {
+      // Add continuation note to current chunk
+      chunks.push(currentChunk.trim() + `\n\n---\n*Continued in AGENTS-${String(chunkIndex + 1).padStart(3, "0")}.md*\n`);
+      chunkIndex++;
+
+      // Start new chunk with header reference
+      currentChunk = `# AGENTS.md (Part ${chunkIndex})\n\n> Continuation from Part ${chunkIndex - 1}\n\n`;
+      currentSize = Buffer.byteLength(currentChunk, "utf-8");
+    }
+
+    // Add section to current chunk
+    currentChunk += section;
+    currentSize += sectionSize;
+  }
+
+  // Add final chunk
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return { chunks, totalSize };
+}
+
+/**
+ * Generate filenames for split output
+ */
+export function getSplitFilenames(baseName: string, count: number): string[] {
+  const ext = baseName.match(/\.[^.]+$/)?.[0] || ".md";
+  const base = baseName.replace(/\.[^.]+$/, "");
+
+  return Array.from({ length: count }, (_, i) =>
+    `${base}-${String(i + 1).padStart(3, "0")}${ext}`
+  );
+}

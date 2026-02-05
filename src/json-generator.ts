@@ -24,6 +24,14 @@ export interface AgentsIndex {
     exports: string[];
     props?: string[];
     description?: string;
+    complexity?: {
+      propCount: number;
+      importCount: number;
+      lineCount: number;
+      hasState: boolean;
+      hasEffects: boolean;
+      hasContext: boolean;
+    };
   }>;
   hooks: Array<{
     name: string;
@@ -72,6 +80,7 @@ export function generateAgentsIndex(result: ScanResult, markdownContent: string)
       exports: c.exports,
       ...(c.props && { props: c.props }),
       ...(c.description && { description: c.description }),
+      ...(c.complexity && { complexity: c.complexity }),
     })),
     hooks: hooks.map(h => ({
       name: h.name,

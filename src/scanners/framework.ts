@@ -59,5 +59,25 @@ export async function detectFramework(dir: string): Promise<Framework> {
     framework.styling = "Emotion";
   }
 
+  // Extract key dependency versions
+  framework.versions = {};
+  if (deps.react) {
+    framework.versions.react = deps.react.replace(/[\^~]/, "");
+  }
+  if (deps.typescript) {
+    framework.versions.typescript = deps.typescript.replace(/[\^~]/, "");
+  }
+  if (deps.tailwindcss) {
+    framework.versions.tailwindcss = deps.tailwindcss.replace(/[\^~]/, "");
+  }
+  if (deps.prisma || deps["@prisma/client"]) {
+    framework.versions.prisma = (deps.prisma || deps["@prisma/client"]).replace(/[\^~]/, "");
+  }
+
+  // Get Node.js version from engines
+  if (pkg.engines?.node) {
+    framework.versions.node = pkg.engines.node;
+  }
+
   return framework;
 }

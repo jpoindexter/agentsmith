@@ -65,6 +65,39 @@ export function scanGitLog(dir: string, limit: number = 10): GitInfo | null {
   }
 }
 
+export function getGitDiff(dir: string): string | null {
+  try {
+    // Check if it's a git repo
+    execSync("git rev-parse --is-inside-work-tree", { cwd: dir, stdio: "pipe" });
+
+    // Get staged and unstaged changes
+    const diff = execSync("git diff HEAD", { cwd: dir, encoding: "utf-8" });
+    return diff.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function formatGitDiff(diff: string): string {
+  if (!diff) return "";
+
+  const lines = [
+    "## Uncommitted Changes",
+    "",
+    "```diff",
+    diff.slice(0, 5000), // Limit to 5KB to avoid huge outputs
+  ];
+
+  if (diff.length > 5000) {
+    lines.push(`... (${((diff.length - 5000) / 1024).toFixed(1)}KB more)`);
+  }
+
+  lines.push("```");
+  lines.push("");
+
+  return lines.join("\n");
+}
+
 export function formatGitLog(gitInfo: GitInfo): string {
   if (!gitInfo || gitInfo.commits.length === 0) return "";
 

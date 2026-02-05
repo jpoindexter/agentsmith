@@ -1,7 +1,7 @@
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 import { basename, dirname, relative } from "path";
-import type { Component } from "../types.js";
+import type { Component, ComponentComplexity } from "../types.js";
 
 const COMPONENT_PATTERNS = [
   // Primary: src/components folder (reusable components)
@@ -66,6 +66,7 @@ export async function scanComponents(dir: string, excludePatterns: string[] = []
     const importPath = toImportPath(file);
     const props = extractProps(content);
     const description = extractJSDoc(content, exports[0]);
+    const complexity = extractComplexity(content, props.length);
 
     components.push({
       name,
@@ -74,6 +75,7 @@ export async function scanComponents(dir: string, excludePatterns: string[] = []
       exports,
       ...(props.length > 0 && { props }),
       ...(description && { description }),
+      complexity,
     });
   }
 
@@ -181,6 +183,29 @@ function extractProps(content: string): string[] {
   const filtered = props.filter(p => !["ref", "key", "children"].includes(p));
 
   return [...new Set(filtered)];
+}
+
+function extractComplexity(content: string, propCount: number): ComponentComplexity {
+  // Count imports
+  const importMatches = content.matchAll(/^import\s+/gm);
+  const importCount = [...importMatches].length;
+
+  // Count lines (non-empty)
+  const lineCount = content.split("\n").filter(line => line.trim()).length;
+
+  // Detect React hooks
+  const hasState = /\buse(?:State|Reducer)\s*\(/.test(content);
+  const hasEffects = /\buseEffect\s*\(/.test(content);
+  const hasContext = /\buseContext\s*\(/.test(content);
+
+  return {
+    propCount,
+    importCount,
+    lineCount,
+    hasState,
+    hasEffects,
+    hasContext,
+  };
 }
 
 function extractJSDoc(content: string, componentName: string): string | undefined {
