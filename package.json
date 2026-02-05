@@ -26,6 +26,14 @@
   ],
   "author": "Jason Poindexter",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jpoindexter/agentsmith.git"
+  },
+  "homepage": "https://github.com/jpoindexter/agentsmith#readme",
+  "bugs": {
+    "url": "https://github.com/jpoindexter/agentsmith/issues"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
