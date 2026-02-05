@@ -1,16 +1,38 @@
+/**
+ * Configuration Loader
+ *
+ * Loads agentsmith configuration from project files.
+ * Searches for configuration in these locations (in order):
+ * - agentsmith.config.json
+ * - agentsmith.config.js
+ * - .agentsmithrc
+ * - .agentsmithrc.json
+ *
+ * @module config
+ */
+
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
+/** Agentsmith configuration options */
 export interface AgentsmithConfig {
+  /** Output file path (default: "AGENTS.md") */
   output?: string;
+  /** Sections to include in output */
   include?: string[];
+  /** Glob patterns to exclude from scanning */
   exclude?: string[];
+  /** Paths to scan for components */
   componentPaths?: string[];
+  /** Include prop information in output */
   showProps?: boolean;
+  /** Include JSDoc descriptions in output */
   showDescriptions?: boolean;
+  /** Maximum components to include (default: 500) */
   maxComponents?: number;
 }
 
+/** Default configuration values */
 const DEFAULT_CONFIG: AgentsmithConfig = {
   output: "AGENTS.md",
   include: ["components", "hooks", "routes", "tokens", "patterns", "variants", "env"],
@@ -21,6 +43,12 @@ const DEFAULT_CONFIG: AgentsmithConfig = {
   maxComponents: 500,
 };
 
+/**
+ * Loads configuration from project directory
+ *
+ * @param dir - Project root directory
+ * @returns Merged configuration (user config + defaults)
+ */
 export function loadConfig(dir: string): AgentsmithConfig {
   const configPaths = [
     join(dir, "agentsmith.config.json"),
@@ -53,6 +81,7 @@ export function loadConfig(dir: string): AgentsmithConfig {
   return DEFAULT_CONFIG;
 }
 
+/** Returns a copy of the default configuration */
 export function getDefaultConfig(): AgentsmithConfig {
   return { ...DEFAULT_CONFIG };
 }

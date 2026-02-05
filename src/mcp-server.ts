@@ -1,5 +1,20 @@
 #!/usr/bin/env node
 
+/**
+ * MCP Server for agentsmith
+ *
+ * Provides Model Context Protocol (MCP) integration for AI tools.
+ * Exposes the following tools:
+ * - pack_codebase: Generate AGENTS.md for a directory
+ * - read_agents: Read existing AGENTS.md file
+ * - search_components: Search for components by name
+ * - get_component_info: Get detailed component information
+ *
+ * Start with: agentsmith --mcp
+ *
+ * @module mcp-server
+ */
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {

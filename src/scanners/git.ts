@@ -1,18 +1,50 @@
+/**
+ * Git Scanner
+ *
+ * Extracts git information from the repository:
+ * - Recent commit history
+ * - Current branch
+ * - Remote URL
+ * - Uncommitted changes (diff)
+ *
+ * @module scanners/git
+ */
+
 import { execSync } from "child_process";
 
+/** Git commit information */
 export interface GitCommit {
+  /** Short commit hash (7 chars) */
   hash: string;
+  /** Commit date (YYYY-MM-DD) */
   date: string;
+  /** Author name */
   author: string;
+  /** Commit message (truncated to 80 chars) */
   message: string;
 }
 
+/** Git repository information */
 export interface GitInfo {
+  /** Recent commits */
   commits: GitCommit[];
+  /** Current branch name */
   branch: string;
+  /** Remote origin URL if configured */
   remoteUrl?: string;
 }
 
+/**
+ * Scans git log for recent commits
+ *
+ * @param dir - Project root directory
+ * @param limit - Maximum number of commits to retrieve
+ * @returns Git info or null if not a git repository
+ *
+ * @example
+ * const git = scanGitLog('/path/to/project', 5);
+ * if (git) console.log(`On branch ${git.branch}`);
+ */
 export function scanGitLog(dir: string, limit: number = 10): GitInfo | null {
   try {
     // Check if it's a git repo
@@ -65,6 +97,12 @@ export function scanGitLog(dir: string, limit: number = 10): GitInfo | null {
   }
 }
 
+/**
+ * Gets uncommitted changes as a diff
+ *
+ * @param dir - Project root directory
+ * @returns Diff string or null if no changes or not a git repo
+ */
 export function getGitDiff(dir: string): string | null {
   try {
     // Check if it's a git repo
@@ -78,6 +116,7 @@ export function getGitDiff(dir: string): string | null {
   }
 }
 
+/** Formats git diff as markdown code block */
 export function formatGitDiff(diff: string): string {
   if (!diff) return "";
 
@@ -98,6 +137,7 @@ export function formatGitDiff(diff: string): string {
   return lines.join("\n");
 }
 
+/** Formats git log as markdown documentation */
 export function formatGitLog(gitInfo: GitInfo): string {
   if (!gitInfo || gitInfo.commits.length === 0) return "";
 

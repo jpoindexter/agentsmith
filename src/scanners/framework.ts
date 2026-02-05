@@ -1,7 +1,34 @@
+/**
+ * Framework Detection Scanner
+ *
+ * Detects the framework, language, and styling solution used in a project
+ * by analyzing package.json and checking for configuration files.
+ *
+ * Supported frameworks:
+ * - Next.js (with App/Pages Router detection)
+ * - Remix
+ * - Vite
+ * - React
+ * - Vue
+ * - Svelte
+ *
+ * @module scanners/framework
+ */
+
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { Framework } from "../types.js";
 
+/**
+ * Detects the framework and tech stack used in a project
+ *
+ * @param dir - Project root directory
+ * @returns Framework information including name, version, router type, and dependencies
+ *
+ * @example
+ * const framework = await detectFramework('/path/to/project');
+ * // Returns: { name: 'Next.js', version: '14.2.0', router: 'App Router', ... }
+ */
 export async function detectFramework(dir: string): Promise<Framework> {
   const framework: Framework = {
     name: "Unknown",

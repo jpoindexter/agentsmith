@@ -1,18 +1,50 @@
+/**
+ * Utility Scanner
+ *
+ * Detects common utility functions and libraries in the codebase:
+ * - cn() class merging utility (clsx/tailwind-merge)
+ * - mode/design-system configuration
+ * - shadcn/ui component library detection
+ * - Radix UI primitives
+ * - CVA (class-variance-authority)
+ *
+ * @module scanners/utilities
+ */
+
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import fg from "fast-glob";
 
+/** Detected utility functions and libraries */
 export interface Utilities {
+  /** Whether cn() class merging utility exists */
   hasCn: boolean;
+  /** Import path for cn() (e.g., "@/lib/utils") */
   cnPath?: string;
+  /** Whether mode/design-system configuration exists */
   hasMode: boolean;
+  /** Import path for mode */
   modePath?: string;
+  /** Whether shadcn/ui is detected (Radix + CVA + cn) */
   hasShadcn: boolean;
+  /** List of installed Radix UI packages */
   radixPackages: string[];
+  /** Whether CVA (class-variance-authority) is installed */
   hasCva: boolean;
+  /** Other custom utility functions found */
   customUtils: string[];
 }
 
+/**
+ * Scans for utility functions and common libraries
+ *
+ * @param dir - Project root directory
+ * @returns Detected utilities and their import paths
+ *
+ * @example
+ * const utils = await scanUtilities('/path/to/project');
+ * if (utils.hasCn) console.log(`cn() available at ${utils.cnPath}`);
+ */
 export async function scanUtilities(dir: string): Promise<Utilities> {
   const utils: Utilities = {
     hasCn: false,

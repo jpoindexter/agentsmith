@@ -1,12 +1,37 @@
+/**
+ * Barrel Export Scanner
+ *
+ * Finds index.ts files that re-export multiple components (barrel exports).
+ * These provide cleaner import paths for consumers.
+ *
+ * @example
+ * // Instead of:
+ * import { Button } from '@/components/ui/button'
+ * // Use:
+ * import { Button } from '@/components/ui'
+ *
+ * @module scanners/barrels
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 
+/** Barrel export information */
 export interface BarrelExport {
+  /** File path of the index.ts */
   path: string;
+  /** Clean import path for consumers */
   importPath: string;
+  /** Names re-exported from this barrel */
   exports: string[];
 }
 
+/**
+ * Scans for barrel export files (index.ts with re-exports)
+ *
+ * @param dir - Project root directory
+ * @returns Array of barrel exports with 3+ exports
+ */
 export async function scanBarrels(dir: string): Promise<BarrelExport[]> {
   const files = await fg(
     [
@@ -48,6 +73,7 @@ export async function scanBarrels(dir: string): Promise<BarrelExport[]> {
   return barrels.sort((a, b) => b.exports.length - a.exports.length);
 }
 
+/** Extracts re-exported names from barrel file content */
 function extractReExports(content: string): string[] {
   const exports: string[] = [];
 
@@ -71,6 +97,7 @@ function extractReExports(content: string): string[] {
   return [...new Set(exports)];
 }
 
+/** Converts barrel file path to clean import path */
 function toImportPath(file: string): string {
   // Remove index.ts(x) and convert to import path
   const withoutIndex = file.replace(/\/index\.(tsx?|jsx?)$/, "");

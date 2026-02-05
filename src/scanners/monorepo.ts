@@ -1,21 +1,54 @@
+/**
+ * Monorepo Detection Scanner
+ *
+ * Detects monorepo configurations and discovers workspace packages:
+ * - npm/yarn workspaces (package.json workspaces field)
+ * - pnpm workspaces (pnpm-workspace.yaml)
+ * - Lerna (lerna.json)
+ *
+ * @module scanners/monorepo
+ */
+
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import fg from "fast-glob";
 
+/** Information about a single package in a monorepo */
 export interface MonorepoPackage {
+  /** Package name from package.json */
   name: string;
+  /** Absolute path to package directory */
   path: string;
+  /** Relative path from monorepo root */
   relativePath: string;
+  /** Whether package.json exists */
   hasPackageJson: boolean;
 }
 
+/** Monorepo detection results */
 export interface MonorepoInfo {
+  /** Whether a monorepo was detected */
   isMonorepo: boolean;
+  /** Monorepo tool type */
   type: "npm" | "pnpm" | "yarn" | "lerna" | "unknown";
+  /** List of discovered packages */
   packages: MonorepoPackage[];
+  /** Root package name if available */
   rootName?: string;
 }
 
+/**
+ * Detects monorepo configuration and discovers packages
+ *
+ * @param dir - Project root directory
+ * @returns Monorepo information including all discovered packages
+ *
+ * @example
+ * const info = await detectMonorepo('/path/to/project');
+ * if (info.isMonorepo) {
+ *   console.log(`Found ${info.packages.length} packages in ${info.type} monorepo`);
+ * }
+ */
 export async function detectMonorepo(dir: string): Promise<MonorepoInfo> {
   const result: MonorepoInfo = {
     isMonorepo: false,
@@ -85,6 +118,7 @@ export async function detectMonorepo(dir: string): Promise<MonorepoInfo> {
   return result;
 }
 
+/** Finds packages matching workspace patterns */
 async function findPackages(
   dir: string,
   patterns: string[]
@@ -132,6 +166,7 @@ async function findPackages(
   return packages.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Formats monorepo overview as markdown documentation */
 export function formatMonorepoOverview(info: MonorepoInfo): string {
   const lines: string[] = [];
 

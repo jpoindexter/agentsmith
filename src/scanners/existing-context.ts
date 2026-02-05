@@ -1,18 +1,45 @@
+/**
+ * Existing Context Scanner
+ *
+ * Detects existing AI documentation files in the project:
+ * - CLAUDE.md (Claude Code instructions)
+ * - AGENTS.md (existing context files)
+ * - .ai/ folder (AI context directory)
+ * - .cursorrules (Cursor AI rules)
+ *
+ * @module scanners/existing-context
+ */
+
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import fg from "fast-glob";
 
+/** Existing AI documentation files in the project */
 export interface ExistingContext {
+  /** Whether CLAUDE.md exists */
   hasClaudeMd: boolean;
+  /** Path to CLAUDE.md if found */
   claudeMdPath?: string;
+  /** Content of CLAUDE.md */
   claudeMdContent?: string;
+  /** Whether a non-agentsmith AGENTS.md exists */
   hasAgentsMd: boolean;
+  /** Path to existing AGENTS.md */
   agentsMdPath?: string;
+  /** Whether .ai/ folder exists */
   hasAiFolder: boolean;
+  /** Files in .ai/ folder */
   aiFiles: string[];
+  /** Whether .cursorrules exists */
   hasCursorRules: boolean;
 }
 
+/**
+ * Scans for existing AI documentation files
+ *
+ * @param dir - Project root directory
+ * @returns Detected existing context files
+ */
 export async function scanExistingContext(dir: string): Promise<ExistingContext> {
   const context: ExistingContext = {
     hasClaudeMd: false,

@@ -1,8 +1,24 @@
+/**
+ * Component Scanner
+ *
+ * Discovers React components in a codebase by scanning for .tsx/.jsx files
+ * in component directories. Extracts metadata including:
+ * - Component name and file path
+ * - Import path for use in code
+ * - Exported names
+ * - Props from TypeScript interfaces
+ * - JSDoc descriptions
+ * - Complexity metrics (imports, lines, hooks usage)
+ *
+ * @module scanners/components
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 import { basename, dirname, relative } from "path";
 import type { Component, ComponentComplexity } from "../types.js";
 
+/** Glob patterns for finding component files */
 const COMPONENT_PATTERNS = [
   // Primary: src/components folder (reusable components)
   "src/components/**/*.tsx",
@@ -16,7 +32,7 @@ const COMPONENT_PATTERNS = [
   "!**/*.stories.*",
 ];
 
-// Next.js special files to skip (not reusable components)
+/** Next.js special files that should not be treated as reusable components */
 const SKIP_FILES = [
   "page.tsx",
   "page.jsx",
@@ -38,8 +54,18 @@ const SKIP_FILES = [
   "middleware.js",
 ];
 
+/**
+ * Scans a directory for React components
+ *
+ * @param dir - Root directory to scan
+ * @param excludePatterns - Additional glob patterns to exclude
+ * @returns Array of discovered components with metadata
+ *
+ * @example
+ * const components = await scanComponents('/path/to/project');
+ * // Returns: [{ name: 'Button', path: 'src/components/ui/button.tsx', ... }]
+ */
 export async function scanComponents(dir: string, excludePatterns: string[] = []): Promise<Component[]> {
-  // Combine default patterns with user-provided exclude patterns
   const patterns = [
     ...COMPONENT_PATTERNS,
     ...excludePatterns.map(p => p.startsWith("!") ? p : `!${p}`),
@@ -83,28 +109,32 @@ export async function scanComponents(dir: string, excludePatterns: string[] = []
   return components.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/**
+ * Extracts exported component names from file content
+ * Matches various export patterns (named, default, const, function)
+ */
 function extractExports(content: string): string[] {
   const exports: string[] = [];
 
-  // Match: export function ComponentName
+  // export function ComponentName
   const funcMatches = content.matchAll(/export\s+function\s+([A-Z][a-zA-Z0-9]*)/g);
   for (const match of funcMatches) {
     exports.push(match[1]);
   }
 
-  // Match: export const ComponentName
+  // export const ComponentName
   const constMatches = content.matchAll(/export\s+const\s+([A-Z][a-zA-Z0-9]*)/g);
   for (const match of constMatches) {
     exports.push(match[1]);
   }
 
-  // Match: export default function ComponentName
+  // export default function ComponentName
   const defaultFuncMatches = content.matchAll(/export\s+default\s+function\s+([A-Z][a-zA-Z0-9]*)/g);
   for (const match of defaultFuncMatches) {
     exports.push(match[1]);
   }
 
-  // Match: export { ComponentName }
+  // export { ComponentName }
   const namedExportMatches = content.matchAll(/export\s*\{\s*([^}]+)\s*\}/g);
   for (const match of namedExportMatches) {
     const names = match[1].split(",").map((n) => n.trim().split(" ")[0]);
@@ -118,8 +148,11 @@ function extractExports(content: string): string[] {
   return [...new Set(exports)];
 }
 
+/**
+ * Determines the primary component name from filename and exports
+ * Prefers the export that matches the filename in PascalCase
+ */
 function getComponentName(file: string, exports: string[]): string {
-  // Prefer the main export that matches the file name
   const fileName = basename(file, ".tsx").replace(".jsx", "");
   const pascalName = toPascalCase(fileName);
 
@@ -131,6 +164,7 @@ function getComponentName(file: string, exports: string[]): string {
   return exports[0] || pascalName;
 }
 
+/** Converts kebab-case or snake_case to PascalCase */
 function toPascalCase(str: string): string {
   return str
     .split(/[-_]/)
@@ -138,8 +172,11 @@ function toPascalCase(str: string): string {
     .join("");
 }
 
+/**
+ * Converts a file path to an import path
+ * @example "src/components/ui/button.tsx" → "@/components/ui/button"
+ */
 function toImportPath(file: string): string {
-  // Convert src/components/ui/button.tsx to @/components/ui/button
   const withoutExt = file.replace(/\.(tsx|jsx)$/, "");
 
   if (withoutExt.startsWith("src/")) {
@@ -149,10 +186,14 @@ function toImportPath(file: string): string {
   return "@/" + withoutExt;
 }
 
+/**
+ * Extracts prop names from TypeScript Props interface/type definitions
+ * Filters out common internal props (ref, key, children)
+ */
 function extractProps(content: string): string[] {
   const props: string[] = [];
 
-  // Match interface XxxProps { ... }
+  // interface XxxProps { ... }
   const interfaceMatch = content.match(/interface\s+\w*Props\s*(?:extends[^{]+)?\{([^}]+)\}/s);
   if (interfaceMatch) {
     const propsBlock = interfaceMatch[1];
@@ -162,7 +203,7 @@ function extractProps(content: string): string[] {
     }
   }
 
-  // Match type XxxProps = { ... }
+  // type XxxProps = { ... }
   const typeMatch = content.match(/type\s+\w*Props\s*=\s*\{([^}]+)\}/s);
   if (typeMatch && props.length === 0) {
     const propsBlock = typeMatch[1];
@@ -172,12 +213,8 @@ function extractProps(content: string): string[] {
     }
   }
 
-  // Match React.ComponentProps or ComponentPropsWithoutRef
-  const extendsMatch = content.match(/(?:React\.ComponentProps|ComponentPropsWithoutRef|ComponentPropsWithRef)<["'](\w+)["']>/);
-  if (extendsMatch) {
-    // Add a note that it extends native element props
-    // Don't list all native props, just note it
-  }
+  // React.ComponentProps or ComponentPropsWithoutRef - skip listing native props
+  content.match(/(?:React\.ComponentProps|ComponentPropsWithoutRef|ComponentPropsWithRef)<["'](\w+)["']>/);
 
   // Filter out common internal props
   const filtered = props.filter(p => !["ref", "key", "children"].includes(p));
@@ -185,8 +222,11 @@ function extractProps(content: string): string[] {
   return [...new Set(filtered)];
 }
 
+/**
+ * Calculates complexity metrics for a component
+ * Includes import count, line count, and React hook detection
+ */
 function extractComplexity(content: string, propCount: number): ComponentComplexity {
-  // Count imports
   const importMatches = content.matchAll(/^import\s+/gm);
   const importCount = [...importMatches].length;
 
@@ -208,9 +248,11 @@ function extractComplexity(content: string, propCount: number): ComponentComplex
   };
 }
 
+/**
+ * Extracts JSDoc description from component documentation
+ * Looks for JSDoc comments directly before the component export
+ */
 function extractJSDoc(content: string, componentName: string): string | undefined {
-  // Look for JSDoc comment directly before the component export
-  // Pattern: /** ... */ followed by export
   const patterns = [
     // /** ... */ export function ComponentName
     new RegExp(`\\/\\*\\*([\\s\\S]*?)\\*\\/\\s*export\\s+(?:function|const)\\s+${componentName}`, "m"),

@@ -1,16 +1,45 @@
+/**
+ * Test Coverage Scanner
+ *
+ * Analyzes test coverage by:
+ * - Detecting the testing framework (Vitest, Jest, Playwright)
+ * - Finding all test files
+ * - Mapping tests to components
+ * - Calculating coverage percentage
+ *
+ * @module scanners/tests
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 import { basename } from "path";
 import type { Component } from "../types.js";
 
+/** Test coverage analysis results */
 export interface TestCoverage {
+  /** Detected testing framework */
   testFramework: "vitest" | "jest" | "playwright" | "testing-library" | "none";
+  /** All test file paths */
   testFiles: string[];
+  /** Component names that have tests */
   testedComponents: string[];
+  /** Component names without tests */
   untestedComponents: string[];
-  coverage: number; // percentage 0-100
+  /** Coverage percentage (0-100) */
+  coverage: number;
 }
 
+/**
+ * Analyzes test coverage for components
+ *
+ * @param dir - Project root directory
+ * @param components - Components discovered by the component scanner
+ * @returns Test coverage analysis
+ *
+ * @example
+ * const coverage = await scanTestCoverage('/path/to/project', components);
+ * console.log(`${coverage.coverage}% of components have tests`);
+ */
 export async function scanTestCoverage(
   dir: string,
   components: Component[]
@@ -93,6 +122,7 @@ export async function scanTestCoverage(
   };
 }
 
+/** Detects which testing framework is installed from package.json */
 async function detectTestFramework(
   dir: string
 ): Promise<TestCoverage["testFramework"]> {

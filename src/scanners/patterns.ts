@@ -1,35 +1,67 @@
+/**
+ * Pattern Detection Scanner
+ *
+ * Identifies common code patterns and libraries used in the codebase:
+ * - Form handling (react-hook-form, Zod)
+ * - State management (Zustand, Redux, TanStack Query)
+ * - Data fetching (tRPC, SWR)
+ * - UI patterns (Radix Slot, forwardRef)
+ * - Testing frameworks (Vitest, Jest, Playwright)
+ *
+ * @module scanners/patterns
+ */
+
 import fg from "fast-glob";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
+/** Detected code patterns and library usage */
 export interface DetectedPatterns {
-  // Form handling
+  /** react-hook-form installed */
   hasReactHookForm: boolean;
+  /** Zod validation library installed */
   hasZod: boolean;
+  /** Description of form handling pattern */
   formPattern?: string;
 
-  // State management
+  /** Zustand state management */
   hasZustand: boolean;
+  /** Redux state management */
   hasRedux: boolean;
+  /** TanStack Query (react-query) */
   hasTanstackQuery: boolean;
 
-  // Data fetching
+  /** tRPC installed */
   hasTrpc: boolean;
+  /** SWR data fetching */
   hasSwr: boolean;
 
-  // UI patterns
+  /** Radix Slot component (asChild pattern) */
   hasRadixSlot: boolean;
+  /** React.forwardRef usage */
   hasForwardRef: boolean;
 
-  // Testing
+  /** Vitest testing framework */
   hasVitest: boolean;
+  /** Jest testing framework */
   hasJest: boolean;
+  /** Playwright E2E testing */
   hasPlaywright: boolean;
 
-  // Common patterns detected
+  /** Human-readable pattern descriptions */
   patterns: string[];
 }
 
+/**
+ * Scans for common code patterns and library usage
+ *
+ * @param dir - Project root directory
+ * @returns Detected patterns with boolean flags and descriptions
+ *
+ * @example
+ * const patterns = await scanPatterns('/path/to/project');
+ * console.log(patterns.patterns); // ["Forms: react-hook-form", "State: Zustand", ...]
+ */
 export async function scanPatterns(dir: string): Promise<DetectedPatterns> {
   const result: DetectedPatterns = {
     hasReactHookForm: false,
