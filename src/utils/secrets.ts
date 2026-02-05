@@ -11,7 +11,8 @@ export interface SecretMatch {
 // Patterns for common secrets
 const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: "AWS Access Key", pattern: /AKIA[0-9A-Z]{16}/g },
-  { name: "AWS Secret Key", pattern: /(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])/g },
+  // AWS Secret Key - must be near aws_secret or similar context, not just any 40-char string
+  { name: "AWS Secret Key", pattern: /(?:aws[_-]?secret[_-]?(?:access[_-]?)?key|secret[_-]?access[_-]?key)\s*[:=]\s*['"]?([A-Za-z0-9/+=]{40})['"]?/gi },
   { name: "GitHub Token", pattern: /gh[pousr]_[A-Za-z0-9_]{36,}/g },
   { name: "GitHub OAuth", pattern: /gho_[A-Za-z0-9]{36}/g },
   { name: "Stripe Key", pattern: /sk_live_[0-9a-zA-Z]{24,}/g },
@@ -70,6 +71,16 @@ function isLikelyPlaceholder(value: string): boolean {
     /^\.{3,}$/,
     /<[^>]+>/,
     /\{[^}]+\}/,
+    // File paths
+    /^[@./]/,
+    /\/[a-z-]+\//i,
+    /\.(ts|tsx|js|jsx|md|json|css)$/i,
+    // Import-like patterns
+    /^@\//,
+    /^src\//,
+    /^components\//,
+    // Common words that aren't secrets
+    /^(function|const|let|var|export|import|from|return)/i,
   ];
 
   return placeholders.some(p => p.test(value));
