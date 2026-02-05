@@ -60,6 +60,44 @@ export interface ExistingContext {
   hasCursorRules: boolean;
 }
 
+export interface ComponentVariant {
+  component: string;
+  variants: Record<string, string[]>;
+  defaultVariants?: Record<string, string>;
+}
+
+export interface ApiRoute {
+  path: string;
+  methods: string[];
+  isProtected: boolean;
+  description?: string;
+}
+
+export interface EnvVar {
+  name: string;
+  required: boolean;
+  hasDefault: boolean;
+  description?: string;
+  category?: string;
+}
+
+export interface DetectedPatterns {
+  hasReactHookForm: boolean;
+  hasZod: boolean;
+  formPattern?: string;
+  hasZustand: boolean;
+  hasRedux: boolean;
+  hasTanstackQuery: boolean;
+  hasTrpc: boolean;
+  hasSwr: boolean;
+  hasRadixSlot: boolean;
+  hasForwardRef: boolean;
+  hasVitest: boolean;
+  hasJest: boolean;
+  hasPlaywright: boolean;
+  patterns: string[];
+}
+
 export interface ScanResult {
   components: Component[];
   tokens: Tokens;
@@ -68,4 +106,8 @@ export interface ScanResult {
   utilities: Utilities;
   commands: Commands;
   existingContext: ExistingContext;
+  variants: ComponentVariant[];
+  apiRoutes: ApiRoute[];
+  envVars: EnvVar[];
+  patterns: DetectedPatterns;
 }

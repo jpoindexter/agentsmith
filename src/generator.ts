@@ -1,8 +1,8 @@
-import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext } from "./types.js";
+import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns } from "./types.js";
 import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
 
 export function generateAgentsMd(result: ScanResult): string {
-  const { components, tokens, framework, hooks, utilities, commands, existingContext } = result;
+  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns } = result;
 
   const lines: string[] = [];
 
@@ -34,6 +34,12 @@ export function generateAgentsMd(result: ScanResult): string {
   lines.push(`| **Components** | ${components.length} |`);
   if (hooks.length > 0) {
     lines.push(`| **Custom Hooks** | ${hooks.length} |`);
+  }
+  if (apiRoutes.length > 0) {
+    lines.push(`| **API Routes** | ${apiRoutes.length} |`);
+  }
+  if (patterns.patterns.length > 0) {
+    lines.push(`| **Patterns** | ${patterns.patterns.length} detected |`);
   }
   lines.push("");
 
@@ -134,6 +140,119 @@ export function generateAgentsMd(result: ScanResult): string {
       lines.push(`- \`${util}()\` — from \`${utilities.cnPath}\``);
     }
     lines.push("");
+  }
+
+  // Component Variants Section
+  if (variants.length > 0) {
+    lines.push("## Component Variants");
+    lines.push("");
+    lines.push("Components with CVA variants (use these instead of custom styling):");
+    lines.push("");
+
+    for (const v of variants.slice(0, 15)) {
+      const variantTypes = Object.entries(v.variants)
+        .map(([type, options]) => `${type}: ${options.join(", ")}`)
+        .join(" | ");
+
+      lines.push(`- **${v.component}** — ${variantTypes}`);
+      if (v.defaultVariants) {
+        const defaults = Object.entries(v.defaultVariants)
+          .map(([k, val]) => `${k}="${val}"`)
+          .join(", ");
+        lines.push(`  - Defaults: ${defaults}`);
+      }
+    }
+    if (variants.length > 15) {
+      lines.push(`- ... and ${variants.length - 15} more`);
+    }
+    lines.push("");
+  }
+
+  // API Routes Section
+  if (apiRoutes.length > 0) {
+    lines.push("## API Routes");
+    lines.push("");
+    lines.push(`${apiRoutes.length} API endpoints:`);
+    lines.push("");
+
+    for (const route of apiRoutes.slice(0, 30)) {
+      const methods = route.methods.join(", ");
+      const auth = route.isProtected ? " 🔒" : "";
+      lines.push(`- \`${methods}\` \`${route.path}\`${auth}`);
+    }
+    if (apiRoutes.length > 30) {
+      lines.push(`- ... and ${apiRoutes.length - 30} more`);
+    }
+    lines.push("");
+  }
+
+  // Environment Variables Section
+  if (envVars.length > 0) {
+    lines.push("## Environment Variables");
+    lines.push("");
+
+    // Group by category if available
+    const required = envVars.filter(e => e.required);
+    const optional = envVars.filter(e => !e.required);
+
+    if (required.length > 0) {
+      lines.push("### Required");
+      lines.push("");
+      lines.push("```bash");
+      for (const env of required.slice(0, 20)) {
+        lines.push(env.name);
+      }
+      lines.push("```");
+      lines.push("");
+    }
+
+    if (optional.length > 0) {
+      lines.push("### Optional");
+      lines.push("");
+      lines.push("```bash");
+      for (const env of optional.slice(0, 15)) {
+        lines.push(env.name);
+      }
+      if (optional.length > 15) {
+        lines.push(`# ... and ${optional.length - 15} more`);
+      }
+      lines.push("```");
+      lines.push("");
+    }
+  }
+
+  // Detected Patterns Section
+  if (patterns.patterns.length > 0) {
+    lines.push("## Code Patterns");
+    lines.push("");
+    lines.push("Detected patterns in this codebase:");
+    lines.push("");
+
+    for (const pattern of patterns.patterns) {
+      lines.push(`- ${pattern}`);
+    }
+    lines.push("");
+
+    // Form pattern guidance
+    if (patterns.hasReactHookForm && patterns.hasZod) {
+      lines.push("### Form Pattern");
+      lines.push("");
+      lines.push("```typescript");
+      lines.push('import { useForm } from "react-hook-form";');
+      lines.push('import { zodResolver } from "@hookform/resolvers/zod";');
+      lines.push('import { z } from "zod";');
+      lines.push("");
+      lines.push("const schema = z.object({");
+      lines.push('  name: z.string().min(1, "Required"),');
+      lines.push('  email: z.string().email(),');
+      lines.push("});");
+      lines.push("");
+      lines.push("const form = useForm({");
+      lines.push("  resolver: zodResolver(schema),");
+      lines.push("});");
+      lines.push("```");
+      lines.push("");
+    }
   }
 
   // Design Tokens

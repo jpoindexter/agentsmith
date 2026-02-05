@@ -9,6 +9,10 @@ import { scanHooks } from "./scanners/hooks.js";
 import { scanUtilities } from "./scanners/utilities.js";
 import { scanCommands } from "./scanners/commands.js";
 import { scanExistingContext } from "./scanners/existing-context.js";
+import { scanVariants } from "./scanners/variants.js";
+import { scanApiRoutes } from "./scanners/api-routes.js";
+import { scanEnvVars } from "./scanners/env-vars.js";
+import { scanPatterns } from "./scanners/patterns.js";
 import { generateAgentsMd } from "./generator.js";
 import { writeFileSync } from "fs";
 import { join } from "path";
@@ -28,7 +32,7 @@ cli
 
     try {
       // Run all scanners in parallel
-      const [components, tokens, framework, hooks, utilities, commands, existingContext] = await Promise.all([
+      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns] = await Promise.all([
         scanComponents(targetDir),
         scanTokens(targetDir),
         detectFramework(targetDir),
@@ -36,12 +40,25 @@ cli
         scanUtilities(targetDir),
         scanCommands(targetDir),
         scanExistingContext(targetDir),
+        scanVariants(targetDir),
+        scanApiRoutes(targetDir),
+        scanEnvVars(targetDir),
+        scanPatterns(targetDir),
       ]);
 
       // Report findings
       console.log(pc.green(`  ✓ Found ${components.length} components`));
+      if (variants.length > 0) {
+        console.log(pc.green(`  ✓ Found ${variants.length} components with CVA variants`));
+      }
       console.log(pc.green(`  ✓ Found ${Object.keys(tokens.colors).length} color tokens`));
       console.log(pc.green(`  ✓ Found ${hooks.length} custom hooks`));
+      if (apiRoutes.length > 0) {
+        console.log(pc.green(`  ✓ Found ${apiRoutes.length} API routes`));
+      }
+      if (envVars.length > 0) {
+        console.log(pc.green(`  ✓ Found ${envVars.length} environment variables`));
+      }
       console.log(pc.green(`  ✓ Detected ${framework.name}${framework.router ? ` (${framework.router})` : ""}`));
 
       if (utilities.hasShadcn) {
@@ -52,6 +69,9 @@ cli
       }
       if (utilities.hasMode) {
         console.log(pc.green(`  ✓ Found mode/design-system`));
+      }
+      if (patterns.patterns.length > 0) {
+        console.log(pc.green(`  ✓ Detected ${patterns.patterns.length} code patterns`));
       }
       if (existingContext.hasClaudeMd) {
         console.log(pc.green(`  ✓ Found existing ${existingContext.claudeMdPath}`));
@@ -68,7 +88,7 @@ cli
       }
 
       // Generate AGENTS.md content
-      const content = generateAgentsMd({ components, tokens, framework, hooks, utilities, commands, existingContext });
+      const content = generateAgentsMd({ components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns });
 
       if (options.dryRun) {
         console.log(pc.yellow("\n  Dry run - would generate:\n"));
