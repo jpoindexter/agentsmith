@@ -311,8 +311,13 @@ agentsmith is specifically designed for the AGENTS.md standard with opinionated 
 ## Works great with
 
 - [Fabrk](https://fabrk.dev) - SaaS boilerplate with 62+ components
+- [indx](https://indx.fabrk.dev) - AI-powered semantic search
 - Any Next.js + Tailwind + shadcn/ui project
 - Any React project with components in `/components`
+
+## Credits
+
+Built by [Jason Poindexter](https://github.com/jpoindexter). Born from building [Fabrk](https://fabrk.dev) and [indx](https://indx.fabrk.dev) — tools that needed AI to understand their codebases.
 
 ## License
 
