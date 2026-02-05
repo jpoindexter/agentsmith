@@ -58,12 +58,16 @@ export async function scanComponents(dir: string): Promise<Component[]> {
 
     const name = getComponentName(file, exports);
     const importPath = toImportPath(file);
+    const props = extractProps(content);
+    const description = extractJSDoc(content, exports[0]);
 
     components.push({
       name,
       path: file,
       importPath,
       exports,
+      ...(props.length > 0 && { props }),
+      ...(description && { description }),
     });
   }
 
@@ -135,4 +139,71 @@ function toImportPath(file: string): string {
   }
 
   return "@/" + withoutExt;
+}
+
+function extractProps(content: string): string[] {
+  const props: string[] = [];
+
+  // Match interface XxxProps { ... }
+  const interfaceMatch = content.match(/interface\s+\w*Props\s*(?:extends[^{]+)?\{([^}]+)\}/s);
+  if (interfaceMatch) {
+    const propsBlock = interfaceMatch[1];
+    const propMatches = propsBlock.matchAll(/^\s*(\w+)\??:/gm);
+    for (const match of propMatches) {
+      props.push(match[1]);
+    }
+  }
+
+  // Match type XxxProps = { ... }
+  const typeMatch = content.match(/type\s+\w*Props\s*=\s*\{([^}]+)\}/s);
+  if (typeMatch && props.length === 0) {
+    const propsBlock = typeMatch[1];
+    const propMatches = propsBlock.matchAll(/^\s*(\w+)\??:/gm);
+    for (const match of propMatches) {
+      props.push(match[1]);
+    }
+  }
+
+  // Match React.ComponentProps or ComponentPropsWithoutRef
+  const extendsMatch = content.match(/(?:React\.ComponentProps|ComponentPropsWithoutRef|ComponentPropsWithRef)<["'](\w+)["']>/);
+  if (extendsMatch) {
+    // Add a note that it extends native element props
+    // Don't list all native props, just note it
+  }
+
+  // Filter out common internal props
+  const filtered = props.filter(p => !["ref", "key", "children"].includes(p));
+
+  return [...new Set(filtered)];
+}
+
+function extractJSDoc(content: string, componentName: string): string | undefined {
+  // Look for JSDoc comment directly before the component export
+  // Pattern: /** ... */ followed by export
+  const patterns = [
+    // /** ... */ export function ComponentName
+    new RegExp(`\\/\\*\\*([\\s\\S]*?)\\*\\/\\s*export\\s+(?:function|const)\\s+${componentName}`, "m"),
+    // /** ... */ export default function ComponentName
+    new RegExp(`\\/\\*\\*([\\s\\S]*?)\\*\\/\\s*export\\s+default\\s+function\\s+${componentName}`, "m"),
+    // General JSDoc at top of file (component description)
+    /^\/\*\*([\s\S]*?)\*\//m,
+  ];
+
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const jsdoc = match[1];
+      // Extract the description (first line after /** and before @)
+      const descMatch = jsdoc.match(/^\s*\*?\s*([^@*\n][^\n]*)/m);
+      if (descMatch) {
+        const desc = descMatch[1].trim();
+        // Skip if it's just "use client" or similar
+        if (desc && !desc.startsWith("use ") && desc.length > 5) {
+          return desc;
+        }
+      }
+    }
+  }
+
+  return undefined;
 }

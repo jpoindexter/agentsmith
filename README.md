@@ -41,6 +41,7 @@ npx agentsmith
   ✓ Detected 6 code patterns
   ✓ Found existing CLAUDE.md
   ✓ Found .ai/ folder (12 files)
+  ✓ Found prisma schema (28 models)
 
   ✓ Generated AGENTS.md
 ```
@@ -74,15 +75,29 @@ agentsmith --output CONTEXT.md
 agentsmith --force
 ```
 
+## Configuration
+
+Create `agentsmith.config.json` in your project root for customization:
+
+```json
+{
+  "output": "AGENTS.md",
+  "showProps": true,
+  "showDescriptions": true,
+  "exclude": ["**/test/**", "**/stories/**"]
+}
+```
+
 ## What it scans
 
 | Scanner | What it finds |
 |---------|---------------|
-| **Components** | React/Vue/Svelte components with exports |
+| **Components** | React/Vue/Svelte components with exports, props, and descriptions |
 | **Variants** | CVA variant options (Button: default, destructive, etc.) |
 | **Tokens** | CSS variables and Tailwind config |
 | **Hooks** | Custom hooks with client-only detection |
 | **API Routes** | Next.js routes with methods and auth status |
+| **Database** | Prisma models with fields and relations |
 | **Environment** | Required/optional env vars from .env.example |
 | **Patterns** | react-hook-form, Zod, Zustand, tRPC, testing libs |
 | **Utilities** | cn(), mode/design-system detection |
@@ -95,10 +110,11 @@ The generated AGENTS.md includes:
 
 - **Project Overview** - Framework, language, styling, detected libraries
 - **Critical Rules** - Non-negotiable rules (use existing components, use tokens)
-- **Components** - Full inventory organized by category
+- **Components** - Full inventory with props and JSDoc descriptions
 - **Component Variants** - CVA options for each component
 - **Custom Hooks** - With client-only markers
 - **API Routes** - Methods and auth status (🔒 for protected)
+- **Database Models** - Prisma models with fields and relations
 - **Environment Variables** - Required vs optional
 - **Code Patterns** - Detected patterns with usage examples
 - **Design Tokens** - Color tokens with usage guidance
@@ -125,9 +141,18 @@ The generated AGENTS.md includes:
 2. **USE DESIGN TOKENS** — Never hardcode colors, use semantic tokens
 3. **USE `cn()`** — Always use cn() for conditional classes
 
-## Component Variants
+## Components
 
-- **Button** — variant: default, destructive, outline, secondary, ghost, link | size: sm, md, lg, icon
+### UI Components (62)
+
+- `Button` — `@/components/ui/button`
+  - Props: variant, size, asChild, disabled
+  - Variants: default, destructive, outline, ghost, link
+
+## Database Models
+
+- **User** — id, email, name, createdAt
+  - Relations: posts, sessions
 
 ## API Routes
 

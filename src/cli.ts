@@ -13,7 +13,9 @@ import { scanVariants } from "./scanners/variants.js";
 import { scanApiRoutes } from "./scanners/api-routes.js";
 import { scanEnvVars } from "./scanners/env-vars.js";
 import { scanPatterns } from "./scanners/patterns.js";
+import { scanDatabase } from "./scanners/database.js";
 import { generateAgentsMd } from "./generator.js";
+import { loadConfig } from "./config.js";
 import { writeFileSync } from "fs";
 import { join } from "path";
 
@@ -27,12 +29,16 @@ cli
   .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean }) => {
     const targetDir = dir || process.cwd();
 
+    // Load config file if present
+    const config = loadConfig(targetDir);
+    const outputFile = options.output !== "AGENTS.md" ? options.output : config.output || "AGENTS.md";
+
     console.log(pc.cyan("\n  agentsmith\n"));
     console.log(pc.dim(`  Scanning ${targetDir}...\n`));
 
     try {
       // Run all scanners in parallel
-      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns] = await Promise.all([
+      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database] = await Promise.all([
         scanComponents(targetDir),
         scanTokens(targetDir),
         detectFramework(targetDir),
@@ -44,6 +50,7 @@ cli
         scanApiRoutes(targetDir),
         scanEnvVars(targetDir),
         scanPatterns(targetDir),
+        scanDatabase(targetDir),
       ]);
 
       // Report findings
@@ -79,6 +86,9 @@ cli
       if (existingContext.hasAiFolder) {
         console.log(pc.green(`  ✓ Found .ai/ folder (${existingContext.aiFiles.length} files)`));
       }
+      if (database) {
+        console.log(pc.green(`  ✓ Found ${database.provider} schema (${database.models.length} models)`));
+      }
 
       // Check for existing non-generated AGENTS.md
       if (existingContext.hasAgentsMd && !options.force) {
@@ -88,16 +98,16 @@ cli
       }
 
       // Generate AGENTS.md content
-      const content = generateAgentsMd({ components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns });
+      const content = generateAgentsMd({ components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database });
 
       if (options.dryRun) {
         console.log(pc.yellow("\n  Dry run - would generate:\n"));
-        console.log(pc.dim("  " + options.output));
+        console.log(pc.dim("  " + outputFile));
         console.log(pc.dim(`  (${content.length} characters)\n`));
       } else {
-        const outputPath = join(targetDir, options.output);
+        const outputPath = join(targetDir, outputFile);
         writeFileSync(outputPath, content, "utf-8");
-        console.log(pc.green(`\n  ✓ Generated ${options.output}\n`));
+        console.log(pc.green(`\n  ✓ Generated ${outputFile}\n`));
       }
     } catch (error) {
       console.error(pc.red(`\n  Error: ${error instanceof Error ? error.message : error}\n`));

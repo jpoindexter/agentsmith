@@ -1,8 +1,8 @@
-import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns } from "./types.js";
+import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns, DatabaseSchema } from "./types.js";
 import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
 
 export function generateAgentsMd(result: ScanResult): string {
-  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns } = result;
+  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database } = result;
 
   const lines: string[] = [];
 
@@ -113,6 +113,16 @@ export function generateAgentsMd(result: ScanResult): string {
       for (const comp of comps) {
         const allExports = comp.exports.map(e => `\`${e}\``).join(", ");
         lines.push(`- ${allExports} — \`${comp.importPath}\``);
+
+        // Add props if available
+        if (comp.props && comp.props.length > 0) {
+          lines.push(`  - Props: ${comp.props.join(", ")}`);
+        }
+
+        // Add description if available
+        if (comp.description) {
+          lines.push(`  - ${comp.description}`);
+        }
       }
       lines.push("");
     }
@@ -182,6 +192,28 @@ export function generateAgentsMd(result: ScanResult): string {
     }
     if (apiRoutes.length > 30) {
       lines.push(`- ... and ${apiRoutes.length - 30} more`);
+    }
+    lines.push("");
+  }
+
+  // Database Models Section
+  if (database && database.models.length > 0) {
+    lines.push("## Database Models");
+    lines.push("");
+    lines.push(`${database.models.length} ${database.provider} models:`);
+    lines.push("");
+
+    for (const model of database.models.slice(0, 20)) {
+      const fieldList = model.fields.slice(0, 6).join(", ");
+      const moreFields = model.fields.length > 6 ? `, +${model.fields.length - 6} more` : "";
+      lines.push(`- **${model.name}** — ${fieldList}${moreFields}`);
+
+      if (model.relations.length > 0) {
+        lines.push(`  - Relations: ${model.relations.join(", ")}`);
+      }
+    }
+    if (database.models.length > 20) {
+      lines.push(`- ... and ${database.models.length - 20} more`);
     }
     lines.push("");
   }

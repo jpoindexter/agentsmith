@@ -3,6 +3,8 @@ export interface Component {
   path: string;
   importPath: string;
   exports: string[];
+  props?: string[];
+  description?: string;
 }
 
 export interface Tokens {
@@ -98,6 +100,17 @@ export interface DetectedPatterns {
   patterns: string[];
 }
 
+export interface DatabaseModel {
+  name: string;
+  fields: string[];
+  relations: string[];
+}
+
+export interface DatabaseSchema {
+  provider: "prisma" | "drizzle" | "unknown";
+  models: DatabaseModel[];
+}
+
 export interface ScanResult {
   components: Component[];
   tokens: Tokens;
@@ -110,4 +123,5 @@ export interface ScanResult {
   apiRoutes: ApiRoute[];
   envVars: EnvVar[];
   patterns: DetectedPatterns;
+  database: DatabaseSchema | null;
 }
