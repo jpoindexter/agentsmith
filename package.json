@@ -4,7 +4,7 @@
   "description": "Auto-generate AGENTS.md from your codebase",
   "type": "module",
   "bin": {
-    "agentsmith": "./dist/cli.js"
+    "agentsmith": "dist/cli.js"
   },
   "scripts": {
     "build": "tsup src/cli.ts --format esm --dts",
