@@ -129,51 +129,65 @@ export async function scanFileTree(dir: string, maxDepth: number = 3): Promise<F
 
 export function formatFileTree(tree: FileTree, maxDepth: number = 3): string {
   const lines: string[] = ["## Project Structure", ""];
+  lines.push("```");
 
-  const renderNode = (node: FileTreeNode, prefix: string = "", depth: number = 0) => {
+  const renderChildren = (children: FileTreeNode[], prefix: string, depth: number) => {
     if (depth > maxDepth) return;
 
-    const isKeyDir = KEY_DIRS.includes(node.name.toLowerCase());
-    const showExpanded = depth < 2 || isKeyDir;
+    // Filter children based on depth
+    const filteredChildren = children.filter(child => {
+      if (child.type === "directory") return true;
+      if (depth < 2) return true;
+      // At deeper levels, only show key files
+      return /\.(ts|tsx|js|jsx|json)$/.test(child.name) &&
+             !child.name.includes(".test.") &&
+             !child.name.includes(".spec.") &&
+             !child.name.includes(".stories.");
+    });
 
-    if (node.type === "directory") {
-      const fileCount = node.fileCount ? ` (${node.fileCount} files)` : "";
-      lines.push(`${prefix}${node.name}/${fileCount}`);
+    // Limit files shown per directory
+    const maxFilesPerDir = 8;
+    let filesShown = 0;
+    let hiddenFiles = 0;
 
-      if (node.children && showExpanded) {
-        const filteredChildren = node.children.filter(child => {
-          // Always show directories, filter out non-essential files at deeper levels
-          if (child.type === "directory") return true;
-          if (depth < 2) return true;
-          // At deeper levels, only show key files
-          return /\.(ts|tsx|js|jsx|json|md)$/.test(child.name) &&
-                 !child.name.includes(".test.") &&
-                 !child.name.includes(".spec.");
-        });
+    filteredChildren.forEach((child, i) => {
+      const isLast = i === filteredChildren.length - 1;
+      const connector = isLast ? "└── " : "├── ";
+      const childPrefix = prefix + (isLast ? "    " : "│   ");
 
-        filteredChildren.forEach((child, i) => {
-          const isLast = i === filteredChildren.length - 1;
-          const connector = isLast ? "└── " : "├── ";
-          const newPrefix = prefix + (isLast ? "    " : "│   ");
+      if (child.type === "directory") {
+        const isKeyDir = KEY_DIRS.includes(child.name.toLowerCase());
+        const shouldExpand = depth < 2 || isKeyDir;
+        const fileCount = child.fileCount ? ` (${child.fileCount})` : "";
 
-          if (child.type === "file") {
-            lines.push(`${prefix}${connector}${child.name}`);
-          } else {
-            renderNode(child, prefix + connector.replace("── ", ""), depth + 1);
-          }
-        });
+        lines.push(`${prefix}${connector}${child.name}/${fileCount}`);
+
+        if (shouldExpand && child.children && child.children.length > 0) {
+          renderChildren(child.children, childPrefix, depth + 1);
+        }
+      } else {
+        // It's a file
+        if (filesShown < maxFilesPerDir) {
+          lines.push(`${prefix}${connector}${child.name}`);
+          filesShown++;
+        } else {
+          hiddenFiles++;
+        }
       }
+    });
+
+    // Show hidden files count
+    if (hiddenFiles > 0) {
+      const connector = "└── ";
+      lines.push(`${prefix}${connector}... ${hiddenFiles} more files`);
     }
   };
 
   if (tree.root.children) {
-    tree.root.children.forEach(child => {
-      renderNode(child, "", 0);
-    });
+    renderChildren(tree.root.children, "", 0);
   }
 
-  lines.push("");
-  lines.push(`*${tree.totalFiles} files across ${tree.totalDirs} directories*`);
+  lines.push("```");
   lines.push("");
 
   return lines.join("\n");
