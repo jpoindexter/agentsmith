@@ -321,4 +321,4 @@ MIT
 
 ---
 
-Built by [Fabrk](https://fabrk.dev)
+Built by [Fabrk](https://fabrk.dev) & [theft.studio](https://theft.studio)
