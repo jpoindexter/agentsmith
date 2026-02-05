@@ -83,6 +83,22 @@ agentsmith --compact
 # Also generate JSON index for programmatic access
 agentsmith --json
 
+# Generate compressed output (signatures only, ~40% smaller)
+agentsmith --compress
+
+# Check for secrets before generating
+agentsmith --check-secrets
+
+# Include recent git commits
+agentsmith --include-git-log
+
+# Output as XML or JSON
+agentsmith --format xml
+agentsmith --format json
+
+# Analyze a remote GitHub repository
+agentsmith --remote https://github.com/user/repo
+
 # Combine options
 agentsmith --compact --json --force
 ```
@@ -96,9 +112,16 @@ Create `agentsmith.config.json` in your project root for customization:
   "output": "AGENTS.md",
   "showProps": true,
   "showDescriptions": true,
-  "exclude": ["**/test/**", "**/stories/**"]
+  "exclude": [
+    "**/test/**",
+    "**/stories/**",
+    "**/fixtures/**",
+    "**/__mocks__/**"
+  ]
 }
 ```
+
+The `exclude` patterns are added to the default exclusions and apply to component scanning.
 
 ## What it scans
 
@@ -167,6 +190,81 @@ Compact mode:
 - Skips JSDoc descriptions
 - Omits codebase statistics
 - Skips dependency graph
+
+## Compress Mode
+
+For AI tools with smaller context windows, use `--compress` to extract signatures only:
+
+```bash
+agentsmith --compress
+
+# Normal:  ~9.9K tokens
+# Compress: ~6.3K tokens (36% smaller)
+```
+
+Compress mode keeps component names and props but strips implementation details.
+
+## Remote Repository Analysis
+
+Analyze any public GitHub repository without cloning:
+
+```bash
+agentsmith --remote https://github.com/shadcn/ui
+
+  Cloning https://github.com/shadcn/ui...
+  ✓ Cloned repository
+
+  Scanning https://github.com/shadcn/ui...
+  ✓ Found 42 components
+  ...
+
+  ✓ Generated AGENTS.md
+```
+
+The AGENTS.md is generated in your current directory. The cloned repo is automatically cleaned up.
+
+## Secret Detection
+
+Before sharing AGENTS.md, scan for accidentally included secrets:
+
+```bash
+agentsmith --check-secrets
+
+  ⚠ Found 2 potential secrets:
+    - AWS Secret Key: AKIA**************** (line 234)
+    - Database URL: postgres://user:**** (line 456)
+
+  Review before sharing publicly.
+```
+
+Detects: AWS keys, GitHub tokens, Stripe keys, database URLs, JWTs, and more.
+
+## Git History
+
+Include recent commits in the output:
+
+```bash
+agentsmith --include-git-log
+
+  ✓ Found 10 recent commits
+```
+
+Adds a "Recent Changes" section with commit hash, date, author, and message.
+
+## Output Formats
+
+Generate in different formats:
+
+```bash
+# Markdown (default)
+agentsmith
+
+# XML for tools that prefer structured data
+agentsmith --format xml
+
+# JSON for programmatic access
+agentsmith --format json
+```
 
 ## JSON Index
 
