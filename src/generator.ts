@@ -1,5 +1,9 @@
-import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns, DatabaseSchema, FileStats, BarrelExport, ComponentDependency } from "./types.js";
+import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns, DatabaseSchema, FileStats, BarrelExport, ComponentDependency, FileTree, ImportGraph, TypeScanResult, AntiPatternsResult } from "./types.js";
 import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
+import { formatFileTree } from "./scanners/file-tree.js";
+import { formatImportGraph } from "./scanners/imports.js";
+import { formatTypes } from "./scanners/types.js";
+import { formatAntiPatterns } from "./scanners/anti-patterns.js";
 
 export interface GeneratorOptions {
   compact?: boolean;
@@ -7,7 +11,7 @@ export interface GeneratorOptions {
 }
 
 export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
-  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies } = result;
+  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns } = result;
   const { compact = false, compress = false } = options;
 
   const lines: string[] = [];
@@ -51,6 +55,11 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
     lines.push(`| **Codebase** | ${stats.totalFiles} files, ${stats.totalLines.toLocaleString()} lines |`);
   }
   lines.push("");
+
+  // File Tree Section (skip in compact/compress mode)
+  if (!compact && !compress && fileTree) {
+    lines.push(formatFileTree(fileTree));
+  }
 
   // Codebase Statistics Section (skip in compact/compress mode)
   if (!compact && !compress && stats && stats.largestFiles.length > 0) {
@@ -194,6 +203,11 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
     lines.push("");
   }
 
+  // TypeScript Types Section (skip in compact/compress mode)
+  if (!compact && !compress && typeExports && (typeExports.propsTypes.length > 0 || typeExports.apiTypes.length > 0)) {
+    lines.push(formatTypes(typeExports));
+  }
+
   // Utilities Section
   if (utilities.customUtils.length > 0 || utilities.hasCn) {
     lines.push("## Utilities");
@@ -238,6 +252,11 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
       }
       lines.push("");
     }
+  }
+
+  // Import Graph Section (hub files, circular deps, external deps)
+  if (!compact && !compress && importGraph) {
+    lines.push(formatImportGraph(importGraph));
   }
 
   // Component Variants Section
@@ -440,6 +459,11 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
       lines.push("</details>");
       lines.push("");
     }
+  }
+
+  // Anti-Patterns Section (Common AI Mistakes)
+  if (!compress && antiPatterns && antiPatterns.patterns.length > 0) {
+    lines.push(formatAntiPatterns(antiPatterns));
   }
 
   // Commands Section

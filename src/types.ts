@@ -137,6 +137,53 @@ export interface DatabaseSchema {
   models: DatabaseModel[];
 }
 
+export interface FileTreeNode {
+  name: string;
+  type: "file" | "directory";
+  children?: FileTreeNode[];
+  fileCount?: number;
+}
+
+export interface FileTree {
+  root: FileTreeNode;
+  totalFiles: number;
+  totalDirs: number;
+}
+
+export interface ImportGraph {
+  hubFiles: Array<{ file: string; importedByCount: number }>;
+  circularDeps: Array<{ cycle: string[] }>;
+  externalDeps: Map<string, number>;
+}
+
+export interface TypeExport {
+  name: string;
+  kind: "interface" | "type" | "enum";
+  file: string;
+  properties?: string[];
+  extends?: string;
+  description?: string;
+}
+
+export interface TypeScanResult {
+  types: TypeExport[];
+  propsTypes: TypeExport[];
+  apiTypes: TypeExport[];
+  modelTypes: TypeExport[];
+}
+
+export interface AntiPattern {
+  title: string;
+  wrong: string;
+  right: string;
+  reason: string;
+}
+
+export interface AntiPatternsResult {
+  patterns: AntiPattern[];
+  warnings: string[];
+}
+
 export interface ScanResult {
   components: Component[];
   tokens: Tokens;
@@ -153,4 +200,8 @@ export interface ScanResult {
   stats: FileStats;
   barrels: BarrelExport[];
   dependencies: ComponentDependency[];
+  fileTree?: FileTree;
+  importGraph?: ImportGraph;
+  typeExports?: TypeScanResult;
+  antiPatterns?: AntiPatternsResult;
 }

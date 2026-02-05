@@ -18,12 +18,16 @@ import { scanStats, formatBytes } from "./scanners/stats.js";
 import { scanBarrels } from "./scanners/barrels.js";
 import { scanDependencies } from "./scanners/dependencies.js";
 import { scanGitLog, formatGitLog } from "./scanners/git.js";
+import { scanFileTree, formatFileTree } from "./scanners/file-tree.js";
+import { scanImports, formatImportGraph } from "./scanners/imports.js";
+import { scanTypes, formatTypes } from "./scanners/types.js";
+import { generateAntiPatterns, formatAntiPatterns } from "./scanners/anti-patterns.js";
 import { generateAgentsMd } from "./generator.js";
 import { generateAgentsIndex } from "./json-generator.js";
 import { estimateTokens, formatTokens, getContextUsage } from "./utils/tokens.js";
 import { detectSecrets } from "./utils/secrets.js";
 import { loadConfig } from "./config.js";
-import { writeFileSync, existsSync, rmSync } from "fs";
+import { writeFileSync, existsSync, rmSync, watch } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
 
@@ -41,7 +45,8 @@ cli
   .option("--format <format>", "Output format: markdown, xml, or json", { default: "markdown" })
   .option("--remote <url>", "Clone and analyze a remote GitHub repository")
   .option("--compress", "Extract signatures only (reduce tokens by ~40%)")
-  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; format?: string; remote?: string; compress?: boolean }) => {
+  .option("--watch", "Watch for file changes and regenerate automatically")
+  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; format?: string; remote?: string; compress?: boolean; watch?: boolean }) => {
     let targetDir = dir || process.cwd();
     let isRemote = false;
     let tempDir = "";
@@ -80,7 +85,7 @@ cli
     try {
       // Run all scanners in parallel
       const excludePatterns = config.exclude || [];
-      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies] = await Promise.all([
+      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports] = await Promise.all([
         scanComponents(targetDir, excludePatterns),
         scanTokens(targetDir),
         detectFramework(targetDir),
@@ -96,7 +101,13 @@ cli
         scanStats(targetDir),
         scanBarrels(targetDir),
         scanDependencies(targetDir),
+        scanFileTree(targetDir),
+        scanImports(targetDir),
+        scanTypes(targetDir),
       ]);
+
+      // Generate anti-patterns based on detected features
+      const antiPatterns = generateAntiPatterns(framework, utilities, tokens, components, utilities.hasMode);
 
       // Report findings
       console.log(pc.green(`  ✓ Found ${components.length} components`));
@@ -138,6 +149,15 @@ cli
       if (barrels.length > 0) {
         console.log(pc.green(`  ✓ Found ${barrels.length} barrel exports`));
       }
+      if (importGraph.hubFiles.length > 0) {
+        console.log(pc.green(`  ✓ Found ${importGraph.hubFiles.length} hub files (most imported)`));
+      }
+      if (importGraph.circularDeps.length > 0) {
+        console.log(pc.yellow(`  ⚠ Found ${importGraph.circularDeps.length} circular dependencies`));
+      }
+      if (typeExports.propsTypes.length > 0) {
+        console.log(pc.green(`  ✓ Found ${typeExports.propsTypes.length} Props types`));
+      }
 
       // Scan git log if requested
       let gitInfo = null;
@@ -157,7 +177,7 @@ cli
 
       // Generate AGENTS.md content
       let content = generateAgentsMd(
-        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies },
+        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns },
         { compact: options.compact, compress: options.compress }
       );
 
@@ -224,7 +244,7 @@ cli
         // Generate JSON index if requested (separate from --format json)
         if (options.json && format === "markdown") {
           const jsonContent = generateAgentsIndex(
-            { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies },
+            { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns },
             content
           );
           const jsonPath = join(writeDir, outputFile.replace(".md", ".index.json"));
@@ -238,6 +258,47 @@ cli
       // Clean up temp directory if remote
       if (isRemote && tempDir && existsSync(tempDir)) {
         rmSync(tempDir, { recursive: true });
+      }
+
+      // Watch mode
+      if (options.watch && !isRemote && !options.dryRun) {
+        console.log(pc.cyan("  👀 Watching for changes... (Ctrl+C to stop)\n"));
+
+        const srcDir = join(targetDir, "src");
+        const componentsDir = join(targetDir, "components");
+        const libDir = join(targetDir, "lib");
+
+        let debounceTimer: NodeJS.Timeout | null = null;
+        const watchDirs = [srcDir, componentsDir, libDir].filter(d => existsSync(d));
+
+        const regenerate = async () => {
+          console.log(pc.dim(`  Regenerating...`));
+          // Re-run the action without watch to regenerate
+          try {
+            execSync(`node ${process.argv[1]} "${targetDir}" -o "${outputFile}" ${options.compact ? "--compact" : ""} ${options.compress ? "--compress" : ""} --force`, {
+              stdio: "inherit",
+            });
+          } catch {
+            // Errors are printed by the child process
+          }
+        };
+
+        for (const watchDir of watchDirs) {
+          watch(watchDir, { recursive: true }, (eventType, filename) => {
+            if (!filename) return;
+            // Ignore non-source files
+            if (!/\.(ts|tsx|js|jsx|css|json)$/.test(filename)) return;
+            // Ignore test files
+            if (/\.(test|spec|stories)\./.test(filename)) return;
+
+            // Debounce regeneration
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(regenerate, 500);
+          });
+        }
+
+        // Keep process alive
+        process.stdin.resume();
       }
     } catch (error) {
       // Clean up temp directory on error
