@@ -1,4 +1,40 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+.agentsmith-temp/
+
+# Generated files (don't commit output)
+AGENTS.md
+AGENTS.xml
+AGENTS.index.json
+AGENTS-*.md
