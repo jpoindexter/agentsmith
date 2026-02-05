@@ -5,6 +5,10 @@ import pc from "picocolors";
 import { scanComponents } from "./scanners/components.js";
 import { scanTokens } from "./scanners/tokens.js";
 import { detectFramework } from "./scanners/framework.js";
+import { scanHooks } from "./scanners/hooks.js";
+import { scanUtilities } from "./scanners/utilities.js";
+import { scanCommands } from "./scanners/commands.js";
+import { scanExistingContext } from "./scanners/existing-context.js";
 import { generateAgentsMd } from "./generator.js";
 import { writeFileSync } from "fs";
 import { join } from "path";
@@ -15,26 +19,56 @@ cli
   .command("[dir]", "Generate AGENTS.md from your codebase")
   .option("-o, --output <file>", "Output file path", { default: "AGENTS.md" })
   .option("--dry-run", "Preview without writing file")
-  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean }) => {
+  .option("--force", "Overwrite existing AGENTS.md even if it has custom content")
+  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean }) => {
     const targetDir = dir || process.cwd();
 
     console.log(pc.cyan("\n  agentsmith\n"));
     console.log(pc.dim(`  Scanning ${targetDir}...\n`));
 
     try {
-      // Run all scanners
-      const [components, tokens, framework] = await Promise.all([
+      // Run all scanners in parallel
+      const [components, tokens, framework, hooks, utilities, commands, existingContext] = await Promise.all([
         scanComponents(targetDir),
         scanTokens(targetDir),
         detectFramework(targetDir),
+        scanHooks(targetDir),
+        scanUtilities(targetDir),
+        scanCommands(targetDir),
+        scanExistingContext(targetDir),
       ]);
 
+      // Report findings
       console.log(pc.green(`  ✓ Found ${components.length} components`));
       console.log(pc.green(`  ✓ Found ${Object.keys(tokens.colors).length} color tokens`));
-      console.log(pc.green(`  ✓ Detected ${framework.name} (${framework.router || "unknown router"})`));
+      console.log(pc.green(`  ✓ Found ${hooks.length} custom hooks`));
+      console.log(pc.green(`  ✓ Detected ${framework.name}${framework.router ? ` (${framework.router})` : ""}`));
+
+      if (utilities.hasShadcn) {
+        console.log(pc.green(`  ✓ Detected shadcn/ui (${utilities.radixPackages.length} Radix packages)`));
+      }
+      if (utilities.hasCn) {
+        console.log(pc.green(`  ✓ Found cn() utility`));
+      }
+      if (utilities.hasMode) {
+        console.log(pc.green(`  ✓ Found mode/design-system`));
+      }
+      if (existingContext.hasClaudeMd) {
+        console.log(pc.green(`  ✓ Found existing ${existingContext.claudeMdPath}`));
+      }
+      if (existingContext.hasAiFolder) {
+        console.log(pc.green(`  ✓ Found .ai/ folder (${existingContext.aiFiles.length} files)`));
+      }
+
+      // Check for existing non-generated AGENTS.md
+      if (existingContext.hasAgentsMd && !options.force) {
+        console.log(pc.yellow(`\n  ⚠ Found existing ${existingContext.agentsMdPath} with custom content`));
+        console.log(pc.yellow(`    Use --force to overwrite\n`));
+        return;
+      }
 
       // Generate AGENTS.md content
-      const content = generateAgentsMd({ components, tokens, framework });
+      const content = generateAgentsMd({ components, tokens, framework, hooks, utilities, commands, existingContext });
 
       if (options.dryRun) {
         console.log(pc.yellow("\n  Dry run - would generate:\n"));

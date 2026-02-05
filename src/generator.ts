@@ -1,7 +1,8 @@
-import type { ScanResult, Component, Framework, Tokens } from "./types.js";
+import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext } from "./types.js";
+import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
 
 export function generateAgentsMd(result: ScanResult): string {
-  const { components, tokens, framework } = result;
+  const { components, tokens, framework, hooks, utilities, commands, existingContext } = result;
 
   const lines: string[] = [];
 
@@ -14,33 +15,85 @@ export function generateAgentsMd(result: ScanResult): string {
   // Project Overview
   lines.push("## Project Overview");
   lines.push("");
-  lines.push(`- **Framework:** ${framework.name}${framework.version ? ` ${framework.version}` : ""}${framework.router ? ` (${framework.router})` : ""}`);
-  lines.push(`- **Language:** ${framework.language}`);
+  lines.push("| | |");
+  lines.push("|---|---|");
+  lines.push(`| **Framework** | ${framework.name}${framework.version ? ` ${framework.version}` : ""}${framework.router ? ` (${framework.router})` : ""} |`);
+  lines.push(`| **Language** | ${framework.language} |`);
   if (framework.styling) {
-    lines.push(`- **Styling:** ${framework.styling}`);
+    lines.push(`| **Styling** | ${framework.styling} |`);
+  }
+  if (utilities.hasShadcn) {
+    lines.push(`| **UI Library** | shadcn/ui (${utilities.radixPackages.length} Radix packages) |`);
+  }
+  if (utilities.hasCn) {
+    lines.push(`| **Class Utility** | \`cn()\` from \`${utilities.cnPath}\` |`);
+  }
+  if (utilities.hasMode) {
+    lines.push(`| **Design System** | \`mode\` from \`${utilities.modePath}\` |`);
+  }
+  lines.push(`| **Components** | ${components.length} |`);
+  if (hooks.length > 0) {
+    lines.push(`| **Custom Hooks** | ${hooks.length} |`);
   }
   lines.push("");
 
-  // Components
+  // Critical Rules - Always first and prominent
+  lines.push("## Critical Rules");
+  lines.push("");
+  lines.push("**These rules are NON-NEGOTIABLE:**");
+  lines.push("");
+  lines.push("1. **USE EXISTING COMPONENTS** — Check the list below before creating ANYTHING new");
+  lines.push("2. **USE DESIGN TOKENS** — Never hardcode colors (`#fff`, `blue-500`), always use semantic tokens");
+
+  if (utilities.hasCn) {
+    lines.push(`3. **USE \`cn()\`** — Always use \`cn()\` for conditional classes: \`className={cn("base", condition && "conditional")}\``);
+  }
+  if (utilities.hasMode) {
+    lines.push(`4. **USE \`mode\`** — Import design system: \`import { mode } from "${utilities.modePath}"\``);
+  }
+  lines.push("");
+
+  // Extract rules from existing CLAUDE.md if present
+  if (existingContext.hasClaudeMd && existingContext.claudeMdContent) {
+    const extractedRules = extractRulesFromClaudeMd(existingContext.claudeMdContent);
+    if (extractedRules.length > 0) {
+      lines.push("### Additional Rules (from CLAUDE.md)");
+      lines.push("");
+      for (const rule of extractedRules.slice(0, 10)) {
+        lines.push(`- ${rule}`);
+      }
+      lines.push("");
+    }
+  }
+
+  // Framework-specific rules
+  const frameworkRules = getFrameworkRules(framework, tokens, utilities);
+  if (frameworkRules.length > 0) {
+    lines.push("### Framework-Specific");
+    lines.push("");
+    for (const rule of frameworkRules) {
+      lines.push(`- ${rule}`);
+    }
+    lines.push("");
+  }
+
+  // Components Section
   if (components.length > 0) {
     lines.push("## Components");
     lines.push("");
 
-    // Group components by directory
     const grouped = groupComponentsByDirectory(components);
     const groupCount = Object.keys(grouped).length;
 
     lines.push(`${components.length} components across ${groupCount} categories.`);
     lines.push("");
 
-    // Sort groups: UI first, then alphabetically
+    // Sort groups: UI first, then Charts, then alphabetically
     const sortedGroups = Object.entries(grouped).sort((a, b) => {
       const aName = formatDirectoryName(a[0]);
       const bName = formatDirectoryName(b[0]);
-      // UI Components first
       if (aName === "UI Components") return -1;
       if (bName === "UI Components") return 1;
-      // Charts second
       if (aName === "Charts") return -1;
       if (bName === "Charts") return 1;
       return aName.localeCompare(bName);
@@ -52,8 +105,6 @@ export function generateAgentsMd(result: ScanResult): string {
       lines.push("");
 
       for (const comp of comps) {
-        // Format: `ComponentName` - path
-        // If multiple exports: `ComponentName`, `Other`, `Exports` - path
         const allExports = comp.exports.map(e => `\`${e}\``).join(", ");
         lines.push(`- ${allExports} — \`${comp.importPath}\``);
       }
@@ -61,77 +112,145 @@ export function generateAgentsMd(result: ScanResult): string {
     }
   }
 
+  // Hooks Section
+  if (hooks.length > 0) {
+    lines.push("## Custom Hooks");
+    lines.push("");
+    for (const hook of hooks) {
+      const clientNote = hook.isClientOnly ? " *(client only)*" : "";
+      lines.push(`- \`${hook.name}\` — \`${hook.importPath}\`${clientNote}`);
+    }
+    lines.push("");
+  }
+
+  // Utilities Section
+  if (utilities.customUtils.length > 0 || utilities.hasCn) {
+    lines.push("## Utilities");
+    lines.push("");
+    if (utilities.hasCn) {
+      lines.push(`- \`cn(...classes)\` — Class merging utility from \`${utilities.cnPath}\``);
+    }
+    for (const util of utilities.customUtils.slice(0, 10)) {
+      lines.push(`- \`${util}()\` — from \`${utilities.cnPath}\``);
+    }
+    lines.push("");
+  }
+
   // Design Tokens
   if (Object.keys(tokens.colors).length > 0) {
     lines.push("## Design Tokens");
     lines.push("");
-    lines.push("Use these tokens instead of hardcoded values:");
+
+    // Mode object documentation if present
+    if (utilities.hasMode) {
+      lines.push("### Using the `mode` Object");
+      lines.push("");
+      lines.push("```typescript");
+      lines.push(`import { mode } from "${utilities.modePath}";`);
+      lines.push(`import { cn } from "${utilities.cnPath || "@/lib/utils"}";`);
+      lines.push("");
+      lines.push("// Usage in components:");
+      lines.push("className={cn(");
+      lines.push('  "base-styles",');
+      lines.push("  mode.radius,        // Dynamic border radius");
+      lines.push("  mode.color.bg.surface,");
+      lines.push("  mode.typography.body.m");
+      lines.push(")}");
+      lines.push("```");
+      lines.push("");
+    }
+
+    lines.push("### Color Tokens");
+    lines.push("");
+    lines.push("**Use semantic classes, never hardcoded colors:**");
+    lines.push("");
+    lines.push("```");
+    lines.push("// Backgrounds");
+    lines.push("bg-background, bg-card, bg-muted, bg-primary, bg-secondary, bg-destructive, bg-accent");
+    lines.push("");
+    lines.push("// Text");
+    lines.push("text-foreground, text-muted-foreground, text-primary-foreground, text-destructive");
+    lines.push("");
+    lines.push("// Borders");
+    lines.push("border-border, border-primary, border-destructive");
+    lines.push("");
+    lines.push("// NEVER USE:");
+    lines.push("// bg-white, bg-black, bg-gray-500, text-gray-600, #ffffff, rgb(...)");
+    lines.push("```");
     lines.push("");
 
-    // Colors
+    // Show actual token values (collapsed for reference)
     if (Object.keys(tokens.colors).length > 0) {
-      lines.push("### Colors");
+      lines.push("<details>");
+      lines.push("<summary>Raw CSS Variables (click to expand)</summary>");
       lines.push("");
       lines.push("```css");
-      for (const [name, value] of Object.entries(tokens.colors)) {
-        if (value !== "tailwind-extended") {
-          lines.push(`--${name}: ${value};`);
-        }
+      for (const [name, value] of Object.entries(tokens.colors).slice(0, 30)) {
+        lines.push(`--${name}: ${value};`);
+      }
+      if (Object.keys(tokens.colors).length > 30) {
+        lines.push(`/* ... and ${Object.keys(tokens.colors).length - 30} more */`);
       }
       lines.push("```");
       lines.push("");
+      lines.push("</details>");
+      lines.push("");
+    }
+  }
 
-      // Tailwind classes
-      const semanticColors = Object.keys(tokens.colors).filter(c =>
-        ["background", "foreground", "primary", "secondary", "muted", "accent", "destructive", "border", "card", "popover", "success", "warning", "info"].some(s => c.includes(s))
-      );
+  // Commands Section
+  if (commands.dev || commands.build || Object.keys(commands.custom).length > 0) {
+    lines.push("## Commands");
+    lines.push("");
+    lines.push("```bash");
+    if (commands.dev) lines.push(`npm run dev          # ${commands.dev}`);
+    if (commands.build) lines.push(`npm run build        # ${commands.build}`);
+    if (commands.test) lines.push(`npm test             # ${commands.test}`);
+    if (commands.lint) lines.push(`npm run lint         # ${commands.lint}`);
+    if (commands.typecheck) lines.push(`npm run typecheck    # ${commands.typecheck}`);
+    lines.push("```");
+    lines.push("");
 
-      if (semanticColors.length > 0) {
-        lines.push("**Available Tailwind classes:**");
-        lines.push("");
-        lines.push("```");
-        lines.push("// Backgrounds");
-        lines.push("bg-background, bg-card, bg-muted, bg-primary, bg-secondary, bg-destructive");
-        lines.push("");
-        lines.push("// Text");
-        lines.push("text-foreground, text-muted-foreground, text-primary, text-destructive");
-        lines.push("");
-        lines.push("// Borders");
-        lines.push("border-border, border-primary");
-        lines.push("```");
-        lines.push("");
+    // Database commands
+    if (commands.db && Object.keys(commands.db).length > 0) {
+      lines.push("### Database");
+      lines.push("");
+      lines.push("```bash");
+      for (const [name, cmd] of Object.entries(commands.db)) {
+        lines.push(`npm run ${name}`);
       }
+      lines.push("```");
+      lines.push("");
     }
 
-    // Radius
-    if (Object.keys(tokens.radius).length > 0) {
-      lines.push("### Border Radius");
+    // Custom/AI commands
+    if (Object.keys(commands.custom).length > 0) {
+      lines.push("### Other Commands");
       lines.push("");
-      lines.push("```css");
-      for (const [name, value] of Object.entries(tokens.radius)) {
-        lines.push(`--${name}: ${value};`);
+      lines.push("```bash");
+      for (const [name] of Object.entries(commands.custom).slice(0, 10)) {
+        lines.push(`npm run ${name}`);
       }
       lines.push("```");
       lines.push("");
     }
   }
 
-  // Rules
-  lines.push("## Rules");
-  lines.push("");
-  lines.push("### Critical");
-  lines.push("");
-  lines.push("1. **USE EXISTING COMPONENTS** — Check the list above before creating anything new");
-  lines.push("2. **USE DESIGN TOKENS** — Never hardcode colors (`#fff`, `blue-500`), use semantic tokens (`bg-primary`, `text-muted-foreground`)");
-  lines.push("");
-
-  // Framework-specific rules
-  const frameworkRules = getFrameworkRules(framework, tokens);
-  if (frameworkRules.length > 0) {
-    lines.push("### Framework-Specific");
+  // Reference to existing docs
+  if (existingContext.hasClaudeMd || existingContext.hasAiFolder) {
+    lines.push("## Additional Documentation");
     lines.push("");
-    for (const rule of frameworkRules) {
-      lines.push(`- ${rule}`);
+    if (existingContext.hasClaudeMd) {
+      lines.push(`- **${existingContext.claudeMdPath}** — Detailed project documentation`);
+    }
+    if (existingContext.hasAiFolder) {
+      lines.push(`- **.ai/ folder** — AI-native context files:`);
+      for (const file of existingContext.aiFiles.slice(0, 10)) {
+        lines.push(`  - \`${file}\``);
+      }
+      if (existingContext.aiFiles.length > 10) {
+        lines.push(`  - ... and ${existingContext.aiFiles.length - 10} more`);
+      }
     }
     lines.push("");
   }
@@ -139,7 +258,7 @@ export function generateAgentsMd(result: ScanResult): string {
   return lines.join("\n");
 }
 
-function getFrameworkRules(framework: Framework, tokens: Tokens): string[] {
+function getFrameworkRules(framework: Framework, tokens: Tokens, utilities: Utilities): string[] {
   const rules: string[] = [];
 
   // Next.js rules
@@ -153,10 +272,16 @@ function getFrameworkRules(framework: Framework, tokens: Tokens): string[] {
 
   // Tailwind rules
   if (framework.styling === "Tailwind CSS") {
-    rules.push("Use `cn()` utility for conditional classes");
+    rules.push("Never use arbitrary values (`w-[137px]`) — use scale values");
     if (Object.keys(tokens.radius).length > 0) {
-      rules.push("Use `rounded-dynamic` or design system radius tokens, not arbitrary values");
+      rules.push("Use design system radius tokens, not arbitrary rounded values");
     }
+  }
+
+  // shadcn/ui rules
+  if (utilities.hasShadcn) {
+    rules.push("Use `asChild` prop when wrapping components with custom elements");
+    rules.push("Use CVA variants for consistent component styling");
   }
 
   // TypeScript rules
@@ -172,9 +297,8 @@ function groupComponentsByDirectory(components: Component[]): Record<string, Com
   const grouped: Record<string, Component[]> = {};
 
   for (const comp of components) {
-    // Get directory from path (e.g., "src/components/ui" from "src/components/ui/button.tsx")
     const parts = comp.path.split("/");
-    parts.pop(); // Remove filename
+    parts.pop();
     const dir = parts.join("/") || "root";
 
     if (!grouped[dir]) {
@@ -187,7 +311,6 @@ function groupComponentsByDirectory(components: Component[]): Record<string, Com
 }
 
 function formatDirectoryName(dir: string): string {
-  // Convert "src/components/ui" to "UI Components"
   const lastPart = dir.split("/").pop() || dir;
 
   if (lastPart === "ui") return "UI Components";
@@ -196,7 +319,6 @@ function formatDirectoryName(dir: string): string {
   if (lastPart === "admin") return "Admin Components";
   if (lastPart === "billing") return "Billing Components";
 
-  // Pascal case the directory name
   return lastPart
     .split(/[-_]/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
