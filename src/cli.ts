@@ -480,5 +480,5 @@ cli
   });
 
 cli.help();
-cli.version("1.4.0");
+cli.version("1.0.0");
 cli.parse();
