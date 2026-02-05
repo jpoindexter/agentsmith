@@ -1,4 +1,4 @@
-import type { ScanResult, Component } from "./types.js";
+import type { ScanResult, Component, Framework, Tokens } from "./types.js";
 
 export function generateAgentsMd(result: ScanResult): string {
   const { components, tokens, framework } = result;
@@ -25,21 +25,37 @@ export function generateAgentsMd(result: ScanResult): string {
   if (components.length > 0) {
     lines.push("## Components");
     lines.push("");
-    lines.push(`Found ${components.length} components in this codebase.`);
-    lines.push("");
 
     // Group components by directory
     const grouped = groupComponentsByDirectory(components);
+    const groupCount = Object.keys(grouped).length;
 
-    for (const [dir, comps] of Object.entries(grouped)) {
-      lines.push(`### ${formatDirectoryName(dir)}`);
+    lines.push(`${components.length} components across ${groupCount} categories.`);
+    lines.push("");
+
+    // Sort groups: UI first, then alphabetically
+    const sortedGroups = Object.entries(grouped).sort((a, b) => {
+      const aName = formatDirectoryName(a[0]);
+      const bName = formatDirectoryName(b[0]);
+      // UI Components first
+      if (aName === "UI Components") return -1;
+      if (bName === "UI Components") return 1;
+      // Charts second
+      if (aName === "Charts") return -1;
+      if (bName === "Charts") return 1;
+      return aName.localeCompare(bName);
+    });
+
+    for (const [dir, comps] of sortedGroups) {
+      const groupName = formatDirectoryName(dir);
+      lines.push(`### ${groupName} (${comps.length})`);
       lines.push("");
-      lines.push("| Component | Import Path |");
-      lines.push("|-----------|-------------|");
 
       for (const comp of comps) {
-        const exports = comp.exports.length > 1 ? ` (also: ${comp.exports.slice(1).join(", ")})` : "";
-        lines.push(`| ${comp.name}${exports} | \`${comp.importPath}\` |`);
+        // Format: `ComponentName` - path
+        // If multiple exports: `ComponentName`, `Other`, `Exports` - path
+        const allExports = comp.exports.map(e => `\`${e}\``).join(", ");
+        lines.push(`- ${allExports} — \`${comp.importPath}\``);
       }
       lines.push("");
     }
@@ -103,12 +119,53 @@ export function generateAgentsMd(result: ScanResult): string {
   // Rules
   lines.push("## Rules");
   lines.push("");
-  lines.push("1. **Use existing components** - Check the component list above before creating new ones");
-  lines.push("2. **Use design tokens** - Never hardcode colors, use semantic tokens");
-  lines.push("3. **Follow patterns** - Match the existing code style in this codebase");
+  lines.push("### Critical");
+  lines.push("");
+  lines.push("1. **USE EXISTING COMPONENTS** — Check the list above before creating anything new");
+  lines.push("2. **USE DESIGN TOKENS** — Never hardcode colors (`#fff`, `blue-500`), use semantic tokens (`bg-primary`, `text-muted-foreground`)");
   lines.push("");
 
+  // Framework-specific rules
+  const frameworkRules = getFrameworkRules(framework, tokens);
+  if (frameworkRules.length > 0) {
+    lines.push("### Framework-Specific");
+    lines.push("");
+    for (const rule of frameworkRules) {
+      lines.push(`- ${rule}`);
+    }
+    lines.push("");
+  }
+
   return lines.join("\n");
+}
+
+function getFrameworkRules(framework: Framework, tokens: Tokens): string[] {
+  const rules: string[] = [];
+
+  // Next.js rules
+  if (framework.name === "Next.js") {
+    if (framework.router === "App Router") {
+      rules.push("Use `'use client'` directive only when component needs interactivity");
+      rules.push("Prefer Server Components by default");
+      rules.push("Use `next/image` for images, `next/link` for navigation");
+    }
+  }
+
+  // Tailwind rules
+  if (framework.styling === "Tailwind CSS") {
+    rules.push("Use `cn()` utility for conditional classes");
+    if (Object.keys(tokens.radius).length > 0) {
+      rules.push("Use `rounded-dynamic` or design system radius tokens, not arbitrary values");
+    }
+  }
+
+  // TypeScript rules
+  if (framework.language === "TypeScript") {
+    rules.push("Type all props and function parameters");
+    rules.push("Avoid `any` — use proper types or `unknown`");
+  }
+
+  return rules;
 }
 
 function groupComponentsByDirectory(components: Component[]): Record<string, Component[]> {
