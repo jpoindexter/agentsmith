@@ -807,7 +807,7 @@ function generateMinimalOutput(result: ScanResult, options: GeneratorOptions): s
     lines.push("## High-Impact Files");
     lines.push("");
     for (const hub of importGraph.hubFiles.slice(0, 5)) {
-      lines.push(`- \`${hub.file}\` (${hub.importedBy} dependents)`);
+      lines.push(`- \`${hub.file}\` (${hub.importedByCount} dependents)`);
     }
     lines.push("");
   }
@@ -906,7 +906,7 @@ function generateXmlOutput(result: ScanResult, options: GeneratorOptions): strin
   if (importGraph && importGraph.hubFiles.length > 0) {
     lines.push('  <hub-files description="Changes to these affect many files">');
     for (const hub of importGraph.hubFiles.slice(0, 8)) {
-      lines.push(`    <file path="${escapeXml(hub.file)}" dependents="${hub.importedBy}" />`);
+      lines.push(`    <file path="${escapeXml(hub.file)}" dependents="${hub.importedByCount}" />`);
     }
     lines.push('  </hub-files>');
     lines.push('');
