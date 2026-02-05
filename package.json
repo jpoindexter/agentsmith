@@ -26,6 +26,9 @@
   ],
   "author": "Jason Poindexter",
   "license": "MIT",
+  "files": [
+    "dist"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jpoindexter/agentsmith.git"
