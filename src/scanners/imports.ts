@@ -13,6 +13,7 @@ export interface ImportGraph {
   hubFiles: Array<{ file: string; importedByCount: number }>;
   circularDeps: Array<{ cycle: string[] }>;
   externalDeps: Map<string, number>; // package -> usage count
+  unusedFiles: string[]; // Files that are never imported
 }
 
 const FILE_PATTERNS = [
@@ -85,11 +86,43 @@ export async function scanImports(dir: string): Promise<ImportGraph> {
   // Detect circular dependencies
   const circularDeps = findCircularDeps(graph);
 
+  // Find unused files (components that are never imported)
+  // Exclude entry points like page.tsx, layout.tsx, index.ts, route.ts
+  const entryPointPatterns = [
+    /page\.(tsx?|jsx?)$/,
+    /layout\.(tsx?|jsx?)$/,
+    /route\.(tsx?|jsx?)$/,
+    /middleware\.(tsx?|jsx?)$/,
+    /error\.(tsx?|jsx?)$/,
+    /loading\.(tsx?|jsx?)$/,
+    /not-found\.(tsx?|jsx?)$/,
+    /^\/?index\.(tsx?|jsx?)$/,
+    /\/index\.(tsx?|jsx?)$/,
+  ];
+
+  const unusedFiles = Array.from(graph.entries())
+    .filter(([file, info]) => {
+      // Skip if it's imported by other files
+      if (info.importedBy.length > 0) return false;
+
+      // Skip entry points
+      if (entryPointPatterns.some(p => p.test(file))) return false;
+
+      // Only include component files
+      if (!file.includes("components/")) return false;
+
+      return true;
+    })
+    .map(([file]) => file)
+    .sort()
+    .slice(0, 20); // Limit to 20
+
   return {
     files: graph,
     hubFiles,
     circularDeps,
     externalDeps,
+    unusedFiles,
   };
 }
 
@@ -222,6 +255,23 @@ export function formatImportGraph(graph: ImportGraph): string {
     for (const { cycle } of graph.circularDeps) {
       lines.push(`- ${cycle.map(f => `\`${basename(f)}\``).join(" → ")}`);
     }
+    lines.push("");
+  }
+
+  // Unused components warning
+  if (graph.unusedFiles && graph.unusedFiles.length > 0) {
+    lines.push("## ⚠️ Potentially Unused Components");
+    lines.push("");
+    lines.push("These component files are never imported anywhere:");
+    lines.push("");
+    for (const file of graph.unusedFiles.slice(0, 10)) {
+      lines.push(`- \`${file}\``);
+    }
+    if (graph.unusedFiles.length > 10) {
+      lines.push(`- ... and ${graph.unusedFiles.length - 10} more`);
+    }
+    lines.push("");
+    lines.push("*Consider removing these or they may be entry points not detected.*");
     lines.push("");
   }
 

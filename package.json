@@ -32,6 +32,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "cac": "^6.7.14",
     "clipboardy": "^5.2.1",
     "fast-glob": "^3.3.0",

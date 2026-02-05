@@ -171,6 +171,7 @@ export interface ImportGraph {
   hubFiles: Array<{ file: string; importedByCount: number }>;
   circularDeps: Array<{ cycle: string[] }>;
   externalDeps: Map<string, number>;
+  unusedFiles: string[];
 }
 
 export interface TypeExport {
@@ -209,6 +210,25 @@ export interface TestCoverage {
   coverage: number;
 }
 
+export interface SecurityAudit {
+  vulnerabilities: {
+    critical: number;
+    high: number;
+    moderate: number;
+    low: number;
+    info: number;
+    total: number;
+  };
+  outdatedPackages: Array<{
+    name: string;
+    current: string;
+    wanted: string;
+    latest: string;
+  }>;
+  hasLockfile: boolean;
+  auditError?: string;
+}
+
 export interface ScanResult {
   components: Component[];
   tokens: Tokens;
@@ -230,4 +250,5 @@ export interface ScanResult {
   typeExports?: TypeScanResult;
   antiPatterns?: AntiPatternsResult;
   testCoverage?: TestCoverage;
+  securityAudit?: SecurityAudit;
 }

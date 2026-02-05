@@ -23,6 +23,8 @@ import { scanImports, formatImportGraph } from "./scanners/imports.js";
 import { scanTypes, formatTypes } from "./scanners/types.js";
 import { generateAntiPatterns, formatAntiPatterns } from "./scanners/anti-patterns.js";
 import { scanTestCoverage } from "./scanners/tests.js";
+import { scanSecurity, formatSecurityAudit } from "./scanners/security.js";
+import { detectMonorepo, formatMonorepoOverview } from "./scanners/monorepo.js";
 import { generateAgentsMd } from "./generator.js";
 import { generateAgentsIndex } from "./json-generator.js";
 import { estimateTokens, formatTokens, getContextUsage } from "./utils/tokens.js";
@@ -52,8 +54,18 @@ cli
   .option("--copy", "Copy output to clipboard")
   .option("--include-diffs", "Include uncommitted git changes")
   .option("--split-output <size>", "Split output into chunks (e.g., 100kb, 500kb)")
+  .option("--security", "Include security audit (npm audit) in output")
+  .option("--monorepo", "Generate AGENTS.md for each package in monorepo")
+  .option("--mcp", "Start as MCP server (for AI tool integration)")
   .option("--watch", "Watch for file changes and regenerate automatically")
-  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; xml?: boolean; remote?: string; compress?: boolean; minimal?: boolean; tree?: boolean; copy?: boolean; includeDiffs?: boolean; splitOutput?: string; watch?: boolean }) => {
+  .action(async (dir: string | undefined, options: { output: string; dryRun?: boolean; force?: boolean; compact?: boolean; json?: boolean; checkSecrets?: boolean; includeGitLog?: boolean; xml?: boolean; remote?: string; compress?: boolean; minimal?: boolean; tree?: boolean; copy?: boolean; includeDiffs?: boolean; splitOutput?: string; security?: boolean; monorepo?: boolean; mcp?: boolean; watch?: boolean }) => {
+    // Handle MCP server mode
+    if (options.mcp) {
+      const { startMcpServer } = await import("./mcp-server.js");
+      await startMcpServer();
+      return;
+    }
+
     let targetDir = dir || process.cwd();
     let isRemote = false;
     let tempDir = "";
@@ -87,6 +99,84 @@ cli
     if (!isRemote) {
       console.log(pc.cyan("\n  agentsmith\n"));
     }
+
+    // Handle monorepo mode
+    if (options.monorepo) {
+      const monorepoInfo = await detectMonorepo(targetDir);
+      if (monorepoInfo.isMonorepo && monorepoInfo.packages.length > 0) {
+        console.log(pc.dim(`  Detected ${monorepoInfo.type} monorepo with ${monorepoInfo.packages.length} packages\n`));
+
+        // Generate AGENTS.md for each package
+        for (const pkg of monorepoInfo.packages) {
+          console.log(pc.dim(`  Scanning ${pkg.name}...`));
+
+          if (options.dryRun) {
+            console.log(pc.yellow(`    Would generate: ${pkg.relativePath}/AGENTS.md`));
+          } else {
+            // Recursively call the main logic for each package
+            const pkgConfig = loadConfig(pkg.path);
+            const pkgExcludePatterns = pkgConfig.exclude || [];
+
+            const [pkgComponents, pkgTokens, pkgFramework, pkgHooks, pkgUtilities, pkgCommands, pkgExistingContext, pkgVariants, pkgApiRoutes, pkgEnvVars, pkgPatterns, pkgDatabase, pkgStats, pkgBarrels, pkgDependencies, pkgFileTree, pkgImportGraph, pkgTypeExports] = await Promise.all([
+              scanComponents(pkg.path, pkgExcludePatterns),
+              scanTokens(pkg.path),
+              detectFramework(pkg.path),
+              scanHooks(pkg.path),
+              scanUtilities(pkg.path),
+              scanCommands(pkg.path),
+              scanExistingContext(pkg.path),
+              scanVariants(pkg.path),
+              scanApiRoutes(pkg.path),
+              scanEnvVars(pkg.path),
+              scanPatterns(pkg.path),
+              scanDatabase(pkg.path),
+              scanStats(pkg.path),
+              scanBarrels(pkg.path),
+              scanDependencies(pkg.path),
+              scanFileTree(pkg.path),
+              scanImports(pkg.path),
+              scanTypes(pkg.path),
+            ]);
+
+            const pkgAntiPatterns = generateAntiPatterns(pkgFramework, pkgUtilities, pkgTokens, pkgComponents, pkgUtilities.hasMode);
+            const pkgTestCoverage = await scanTestCoverage(pkg.path, pkgComponents);
+
+            const pkgContent = generateAgentsMd(
+              { components: pkgComponents, tokens: pkgTokens, framework: pkgFramework, hooks: pkgHooks, utilities: pkgUtilities, commands: pkgCommands, existingContext: pkgExistingContext, variants: pkgVariants, apiRoutes: pkgApiRoutes, envVars: pkgEnvVars, patterns: pkgPatterns, database: pkgDatabase, stats: pkgStats, barrels: pkgBarrels, dependencies: pkgDependencies, fileTree: pkgFileTree, importGraph: pkgImportGraph, typeExports: pkgTypeExports, antiPatterns: pkgAntiPatterns, testCoverage: pkgTestCoverage },
+              { compact: options.compact, compress: options.compress, minimal: options.minimal }
+            );
+
+            const pkgOutputPath = join(pkg.path, "AGENTS.md");
+            writeFileSync(pkgOutputPath, pkgContent, "utf-8");
+            const pkgTokenCount = estimateTokens(pkgContent);
+            console.log(pc.green(`    ✓ ${pkg.relativePath}/AGENTS.md (~${formatTokens(pkgTokenCount)} tokens)`));
+          }
+        }
+
+        // Generate root AGENTS.md with monorepo overview
+        if (!options.dryRun) {
+          const rootLines = [
+            "# AGENTS.md",
+            "",
+            "> Auto-generated by [agentsmith](https://github.com/jpoindexter/agentsmith)",
+            "",
+            formatMonorepoOverview(monorepoInfo),
+          ];
+          const rootContent = rootLines.join("\n");
+          const rootOutputPath = join(targetDir, "AGENTS.md");
+          writeFileSync(rootOutputPath, rootContent, "utf-8");
+          console.log(pc.green(`\n  ✓ Generated root AGENTS.md`));
+        } else {
+          console.log(pc.yellow(`\n  Would generate: AGENTS.md (root overview)`));
+        }
+
+        console.log("");
+        return;
+      } else {
+        console.log(pc.yellow(`  Not a monorepo, proceeding with standard scan...\n`));
+      }
+    }
+
     console.log(pc.dim(`  Scanning ${isRemote ? options.remote : targetDir}...\n`));
 
     try {
@@ -118,6 +208,9 @@ cli
 
       // Scan test coverage (needs components list)
       const testCoverage = await scanTestCoverage(targetDir, components);
+
+      // Scan security (optional, only when --security flag)
+      const securityAudit = options.security ? await scanSecurity(targetDir) : null;
 
       // Report findings
       console.log(pc.green(`  ✓ Found ${components.length} components`));
@@ -165,11 +258,27 @@ cli
       if (importGraph.circularDeps.length > 0) {
         console.log(pc.yellow(`  ⚠ Found ${importGraph.circularDeps.length} circular dependencies`));
       }
+      if (importGraph.unusedFiles.length > 0) {
+        console.log(pc.yellow(`  ⚠ Found ${importGraph.unusedFiles.length} potentially unused components`));
+      }
       if (typeExports.propsTypes.length > 0) {
         console.log(pc.green(`  ✓ Found ${typeExports.propsTypes.length} Props types`));
       }
       if (testCoverage.testFiles.length > 0) {
         console.log(pc.green(`  ✓ Found ${testCoverage.testFiles.length} test files (${testCoverage.coverage}% component coverage)`));
+      }
+      if (securityAudit) {
+        const v = securityAudit.vulnerabilities;
+        if (v.total > 0) {
+          const parts: string[] = [];
+          if (v.critical > 0) parts.push(`${v.critical} critical`);
+          if (v.high > 0) parts.push(`${v.high} high`);
+          if (v.moderate > 0) parts.push(`${v.moderate} moderate`);
+          if (v.low > 0) parts.push(`${v.low} low`);
+          console.log(pc.yellow(`  ⚠ Security: ${parts.join(", ")} vulnerabilities`));
+        } else if (!securityAudit.auditError) {
+          console.log(pc.green(`  ✓ Security: No vulnerabilities found`));
+        }
       }
 
       // Scan git log if requested
@@ -190,7 +299,7 @@ cli
 
       // Generate AGENTS.md content
       let content = generateAgentsMd(
-        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage },
+        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage, securityAudit: securityAudit || undefined },
         { compact: options.compact, compress: options.compress, minimal: options.minimal, includeTree: options.tree, xml: options.xml }
       );
 
@@ -206,6 +315,11 @@ cli
           content += "\n" + formatGitDiff(diff);
           console.log(pc.green(`  ✓ Included uncommitted changes (${(diff.length / 1024).toFixed(1)}KB)`));
         }
+      }
+
+      // Append security audit if included
+      if (securityAudit && !options.minimal && !options.xml) {
+        content += "\n" + formatSecurityAudit(securityAudit);
       }
 
       // Check for secrets if requested
