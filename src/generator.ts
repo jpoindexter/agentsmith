@@ -1,3 +1,17 @@
+/**
+ * AGENTS.md Generator
+ *
+ * Transforms scan results into formatted documentation. Supports multiple
+ * output modes:
+ * - Default: Full documentation with all sections
+ * - Compact: Reduced detail (~20% smaller)
+ * - Compress: Signatures only (~40% smaller)
+ * - Minimal: Ultra-compact (~3K tokens)
+ * - XML: Structured XML format (Repomix compatible)
+ *
+ * @module generator
+ */
+
 import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns, DatabaseSchema, FileStats, BarrelExport, ComponentDependency, FileTree, ImportGraph, TypeScanResult, AntiPatternsResult } from "./types.js";
 import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
 import { formatFileTree } from "./scanners/file-tree.js";
@@ -5,6 +19,7 @@ import { formatImportGraph } from "./scanners/imports.js";
 import { formatTypes } from "./scanners/types.js";
 import { formatAntiPatterns } from "./scanners/anti-patterns.js";
 
+/** Options for controlling AGENTS.md generation */
 export interface GeneratorOptions {
   compact?: boolean;
   compress?: boolean;
@@ -13,6 +28,17 @@ export interface GeneratorOptions {
   xml?: boolean;          // XML format (industry standard, matches Repomix)
 }
 
+/**
+ * Generates AGENTS.md content from scan results
+ *
+ * @param result - Complete scan results from all scanners
+ * @param options - Output options (compact, compress, minimal, xml)
+ * @returns Formatted markdown or XML string
+ *
+ * @example
+ * const content = generateAgentsMd(scanResult, { compact: true });
+ * writeFileSync('AGENTS.md', content);
+ */
 export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
   const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns } = result;
   const { compact = false, compress = false, minimal = false, includeTree = false, xml = false } = options;

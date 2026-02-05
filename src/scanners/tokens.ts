@@ -1,7 +1,22 @@
+/**
+ * Design Token Scanner
+ *
+ * Extracts CSS design tokens from Tailwind CSS configuration and
+ * CSS variable definitions. Discovers colors, spacing, radius, and fonts.
+ *
+ * Supports:
+ * - Tailwind CSS v3 and v4 (with @theme blocks)
+ * - CSS custom properties (:root variables)
+ * - data-theme selectors for multi-theme setups
+ *
+ * @module scanners/tokens
+ */
+
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { Tokens } from "../types.js";
 
+/** Tailwind config file locations to check */
 const TAILWIND_CONFIG_FILES = [
   "tailwind.config.ts",
   "tailwind.config.js",
@@ -9,6 +24,7 @@ const TAILWIND_CONFIG_FILES = [
   "tailwind.config.cjs",
 ];
 
+/** Global CSS file locations to check */
 const CSS_FILES = [
   "src/app/globals.css",
   "src/styles/globals.css",
@@ -17,6 +33,16 @@ const CSS_FILES = [
   "globals.css",
 ];
 
+/**
+ * Scans for design tokens in CSS and Tailwind configuration
+ *
+ * @param dir - Project root directory
+ * @returns Design tokens organized by category
+ *
+ * @example
+ * const tokens = await scanTokens('/path/to/project');
+ * // Returns: { colors: { primary: 'oklch(...)' }, radius: { radius: '0.5rem' }, ... }
+ */
 export async function scanTokens(dir: string): Promise<Tokens> {
   const tokens: Tokens = {
     colors: {},
@@ -48,8 +74,8 @@ export async function scanTokens(dir: string): Promise<Tokens> {
   return tokens;
 }
 
+/** Extracts CSS variables from :root and @theme blocks */
 function extractCssVariables(content: string, tokens: Tokens): void {
-  // Match CSS variables in :root OR @theme blocks (Tailwind 4)
   const blockPatterns = [
     /:root\s*\{([^}]+)\}/g,
     /@theme\s*\{([^}]+)\}/g,
@@ -72,8 +98,8 @@ function extractCssVariables(content: string, tokens: Tokens): void {
   }
 }
 
+/** Parses CSS variable declarations and categorizes them */
 function extractTokensFromBlock(blockContent: string, tokens: Tokens): void {
-  // Extract all CSS variables: --name: value;
   const varMatches = blockContent.matchAll(/--([a-zA-Z][a-zA-Z0-9-]*):\s*([^;]+);/g);
 
   for (const match of varMatches) {
@@ -99,6 +125,7 @@ function extractTokensFromBlock(blockContent: string, tokens: Tokens): void {
   }
 }
 
+/** Determines if a CSS variable name represents a color token */
 function isColorToken(name: string): boolean {
   const colorKeywords = [
     "background", "foreground", "primary", "secondary", "accent",
@@ -108,8 +135,8 @@ function isColorToken(name: string): boolean {
   return colorKeywords.some(keyword => name.includes(keyword));
 }
 
+/** Extracts extended theme tokens from Tailwind config */
 function extractTailwindTokens(content: string, tokens: Tokens): void {
-  // Look for theme.extend.colors
   const colorsMatch = content.match(/colors:\s*\{([^}]+)\}/);
   if (colorsMatch) {
     // Extract color keys (simplified - just gets the keys)

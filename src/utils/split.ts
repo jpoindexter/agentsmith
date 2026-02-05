@@ -1,15 +1,31 @@
 /**
- * Split content into chunks based on size limit
- * Splits at section boundaries (## headers) when possible
+ * Output Splitting Utility
+ *
+ * Splits large AGENTS.md files into multiple smaller chunks
+ * to fit within context window limits. Splits at section
+ * boundaries (## headers) to maintain document coherence.
+ *
+ * @module utils/split
  */
 
+/** Result of splitting content into chunks */
 export interface SplitResult {
+  /** Array of content chunks */
   chunks: string[];
+  /** Total size in bytes */
   totalSize: number;
 }
 
 /**
- * Parse size string to bytes (e.g., "100kb" -> 102400)
+ * Parses a human-readable size string to bytes
+ *
+ * @param size - Size string (e.g., "100kb", "1mb", "500")
+ * @returns Size in bytes
+ * @throws Error if format is invalid
+ *
+ * @example
+ * parseSize("100kb") // 102400
+ * parseSize("1mb")   // 1048576
  */
 export function parseSize(size: string): number {
   const match = size.match(/^(\d+(?:\.\d+)?)\s*(kb|mb|k|m)?$/i);
@@ -33,7 +49,15 @@ export function parseSize(size: string): number {
 }
 
 /**
- * Split content into chunks at section boundaries
+ * Splits content into chunks at section boundaries
+ *
+ * @param content - Full content to split
+ * @param maxBytes - Maximum bytes per chunk
+ * @returns Split result with chunks array
+ *
+ * @example
+ * const result = splitContent(markdown, 100 * 1024); // 100KB chunks
+ * console.log(`Split into ${result.chunks.length} parts`);
  */
 export function splitContent(content: string, maxBytes: number): SplitResult {
   const chunks: string[] = [];
@@ -88,7 +112,11 @@ export function splitContent(content: string, maxBytes: number): SplitResult {
 }
 
 /**
- * Generate filenames for split output
+ * Generates numbered filenames for split output
+ *
+ * @param baseName - Base filename (e.g., "AGENTS.md")
+ * @param count - Number of chunks
+ * @returns Array of filenames (e.g., ["AGENTS-001.md", "AGENTS-002.md"])
  */
 export function getSplitFilenames(baseName: string, count: number): string[] {
   const ext = baseName.match(/\.[^.]+$/)?.[0] || ".md";

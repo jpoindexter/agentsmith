@@ -1,18 +1,49 @@
+/**
+ * Component Dependencies Scanner
+ *
+ * Analyzes import statements in components to categorize their dependencies.
+ * Useful for understanding component composition and design system usage.
+ *
+ * Categories:
+ * - utilities: cn(), clsx, tailwind-merge
+ * - designSystem: mode, tokens, theme
+ * - radix: @radix-ui primitives
+ * - internal: other project components
+ * - external: third-party packages
+ *
+ * @module scanners/dependencies
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 
+/** Component dependency analysis */
 export interface ComponentDependency {
+  /** Component name */
   component: string;
+  /** File path */
   path: string;
+  /** Categorized imports */
   imports: {
-    utilities: string[];    // cn, clsx, etc.
-    designSystem: string[]; // mode, tokens
-    radix: string[];        // @radix-ui packages
-    internal: string[];     // other components
-    external: string[];     // react, next, etc.
+    /** Utility imports (cn, clsx, etc.) */
+    utilities: string[];
+    /** Design system imports (mode, tokens) */
+    designSystem: string[];
+    /** Radix UI primitives */
+    radix: string[];
+    /** Internal project imports */
+    internal: string[];
+    /** External package imports */
+    external: string[];
   };
 }
 
+/**
+ * Scans components for their import dependencies
+ *
+ * @param dir - Project root directory
+ * @returns Array of component dependencies with notable imports
+ */
 export async function scanDependencies(dir: string): Promise<ComponentDependency[]> {
   const files = await fg(
     ["src/components/**/*.tsx", "components/**/*.tsx"],
@@ -50,6 +81,7 @@ export async function scanDependencies(dir: string): Promise<ComponentDependency
   return dependencies.sort((a, b) => a.component.localeCompare(b.component));
 }
 
+/** Extracts component name from file path */
 function getComponentName(file: string): string {
   const parts = file.split("/");
   const fileName = parts.pop() || "";
@@ -59,6 +91,7 @@ function getComponentName(file: string): string {
     .join("");
 }
 
+/** Extracts and categorizes imports from file content */
 function extractImports(content: string): ComponentDependency["imports"] {
   const utilities: string[] = [];
   const designSystem: string[] = [];

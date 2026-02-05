@@ -1,14 +1,30 @@
+/**
+ * JSON Index Generator
+ *
+ * Generates AGENTS.index.json - a machine-readable companion file
+ * to AGENTS.md. Useful for programmatic access to component data.
+ *
+ * Used with the --json flag: agentsmith --json
+ *
+ * @module json-generator
+ */
+
 import type { ScanResult } from "./types.js";
 import { estimateTokens } from "./utils/tokens.js";
 
+/** Structure of the AGENTS.index.json file */
 export interface AgentsIndex {
+  /** Schema version */
   version: string;
+  /** ISO timestamp of generation */
   generated: string;
+  /** Project metadata */
   project: {
     framework: string;
     language: string;
     styling?: string;
   };
+  /** Codebase statistics */
   stats: {
     components: number;
     hooks: number;
@@ -18,6 +34,7 @@ export interface AgentsIndex {
     lines: number;
     tokens: number;
   };
+  /** Component list with metadata */
   components: Array<{
     name: string;
     path: string;
@@ -33,27 +50,38 @@ export interface AgentsIndex {
       hasContext: boolean;
     };
   }>;
+  /** Custom hooks */
   hooks: Array<{
     name: string;
     path: string;
     clientOnly: boolean;
   }>;
+  /** API routes */
   routes: Array<{
     path: string;
     methods: string[];
     protected: boolean;
   }>;
+  /** Database models */
   models: Array<{
     name: string;
     fields: string[];
     relations: string[];
   }>;
+  /** Barrel exports for cleaner imports */
   barrels: Array<{
     path: string;
     exports: string[];
   }>;
 }
 
+/**
+ * Generates JSON index from scan results
+ *
+ * @param result - Complete scan results
+ * @param markdownContent - Generated markdown content (for token count)
+ * @returns JSON string of the index
+ */
 export function generateAgentsIndex(result: ScanResult, markdownContent: string): string {
   const { components, framework, hooks, apiRoutes, database, stats, barrels } = result;
 

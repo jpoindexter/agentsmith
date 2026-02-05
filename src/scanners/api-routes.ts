@@ -1,13 +1,41 @@
+/**
+ * API Routes Scanner
+ *
+ * Discovers API routes in Next.js projects (both App Router and Pages Router).
+ * Extracts HTTP methods, route paths, and authentication status.
+ *
+ * Supports:
+ * - App Router: /app/api/\*\*\/route.ts
+ * - Pages Router: /pages/api/\*\*\/*.ts
+ *
+ * @module scanners/api-routes
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 
+/** API route information */
 export interface ApiRoute {
+  /** Route path (e.g., "/api/users/:id") */
   path: string;
+  /** HTTP methods handled (GET, POST, PUT, DELETE, etc.) */
   methods: string[];
+  /** Whether the route requires authentication */
   isProtected: boolean;
+  /** Route description from JSDoc if available */
   description?: string;
 }
 
+/**
+ * Scans for API routes in a Next.js project
+ *
+ * @param dir - Project root directory
+ * @returns Array of discovered API routes
+ *
+ * @example
+ * const routes = await scanApiRoutes('/path/to/project');
+ * // Returns: [{ path: '/api/users/:id', methods: ['GET', 'PUT'], isProtected: true }]
+ */
 export async function scanApiRoutes(dir: string): Promise<ApiRoute[]> {
   // Look for Next.js App Router API routes
   const files = await fg([
@@ -39,10 +67,12 @@ export async function scanApiRoutes(dir: string): Promise<ApiRoute[]> {
   return routes.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/**
+ * Parses a route file to extract HTTP methods and auth status
+ * Supports both App Router (export function GET/POST) and Pages Router styles
+ */
 function parseRoute(file: string, content: string): ApiRoute | null {
   const methods: string[] = [];
-
-  // Detect HTTP methods (App Router style)
   if (content.includes("export async function GET") || content.includes("export function GET")) {
     methods.push("GET");
   }
@@ -95,8 +125,11 @@ function parseRoute(file: string, content: string): ApiRoute | null {
   };
 }
 
+/**
+ * Converts a file path to an API route path
+ * @example "src/app/api/users/[id]/route.ts" → "/api/users/:id"
+ */
 function fileToApiPath(file: string): string {
-  // Remove src/ prefix and file extension
   let path = file
     .replace(/^src\//, "")
     .replace(/^pages/, "")

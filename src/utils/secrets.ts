@@ -1,15 +1,36 @@
 /**
- * Detect potential secrets in content before output
+ * Secret Detection Utility
+ *
+ * Scans content for potential secrets before including in output.
+ * Detects common API keys, tokens, and credentials using patterns
+ * with unique prefixes to minimize false positives.
+ *
+ * Supported detections:
+ * - AWS keys (AKIA...)
+ * - GitHub tokens (gh*_...)
+ * - Stripe keys (sk_live_..., sk_test_...)
+ * - OpenAI/Anthropic keys
+ * - Database URLs
+ * - Private keys
+ * - JWT tokens
+ *
+ * @module utils/secrets
  */
 
+/** Detected secret match */
 export interface SecretMatch {
+  /** Type of secret detected */
   type: string;
+  /** Line number where found */
   line: number;
+  /** Masked preview of the secret */
   preview: string;
 }
 
-// Patterns for common secrets
-// Only include patterns with unique prefixes or required context to minimize false positives
+/**
+ * Secret detection patterns
+ * Only includes patterns with unique prefixes to minimize false positives
+ */
 const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp; requiresContext?: boolean }> = [
   // === High confidence: Unique prefixes ===
   { name: "AWS Access Key", pattern: /AKIA[0-9A-Z]{16}/g },
@@ -46,6 +67,12 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp; requiresContext?: 
   { name: "JWT Token", pattern: /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}/g },
 ];
 
+/**
+ * Scans content for potential secrets
+ *
+ * @param content - Content to scan
+ * @returns Array of detected secret matches
+ */
 export function detectSecrets(content: string): SecretMatch[] {
   const matches: SecretMatch[] = [];
   const lines = content.split("\n");
@@ -75,6 +102,7 @@ export function detectSecrets(content: string): SecretMatch[] {
   return matches;
 }
 
+/** Checks if a matched value is likely a placeholder, not a real secret */
 function isLikelyPlaceholder(value: string): boolean {
   const placeholders = [
     // Explicit placeholders
@@ -124,6 +152,7 @@ function isLikelyPlaceholder(value: string): boolean {
   return placeholders.some(p => p.test(value));
 }
 
+/** Masks a secret value, showing only first and last 4 characters */
 function maskSecret(value: string): string {
   if (value.length <= 8) return "****";
   const start = value.slice(0, 4);
@@ -131,6 +160,7 @@ function maskSecret(value: string): string {
   return `${start}...${end}`;
 }
 
+/** Formats detected secrets as markdown warnings */
 export function formatSecretWarnings(matches: SecretMatch[]): string {
   if (matches.length === 0) return "";
 

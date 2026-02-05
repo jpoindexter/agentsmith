@@ -1,23 +1,48 @@
+/**
+ * TypeScript Type Scanner
+ *
+ * Extracts exported TypeScript types, interfaces, and enums.
+ * Categorizes them for documentation:
+ * - Props types (component props)
+ * - API types (request/response)
+ * - Model types (data models)
+ *
+ * @module scanners/types
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 import { basename } from "path";
 
+/** Exported TypeScript type/interface */
 export interface TypeExport {
+  /** Type name */
   name: string;
+  /** Type kind */
   kind: "interface" | "type" | "enum";
+  /** Source file */
   file: string;
+  /** Property names for interfaces */
   properties?: string[];
+  /** Extended type */
   extends?: string;
+  /** JSDoc description */
   description?: string;
 }
 
+/** TypeScript type scan results */
 export interface TypeScanResult {
+  /** All exported types */
   types: TypeExport[];
+  /** Props types (ending in Props) */
   propsTypes: TypeExport[];
+  /** API-related types */
   apiTypes: TypeExport[];
+  /** Model/entity types */
   modelTypes: TypeExport[];
 }
 
+/** Glob patterns for finding TypeScript files */
 const TYPE_PATTERNS = [
   "src/**/*.{ts,tsx}",
   "types/**/*.{ts,tsx}",
@@ -28,6 +53,12 @@ const TYPE_PATTERNS = [
   "!**/generated/**",
 ];
 
+/**
+ * Scans for exported TypeScript types
+ *
+ * @param dir - Project root directory
+ * @returns Categorized type exports
+ */
 export async function scanTypes(dir: string): Promise<TypeScanResult> {
   const files = await fg(TYPE_PATTERNS, {
     cwd: dir,

@@ -1,14 +1,39 @@
+/**
+ * File Statistics Scanner
+ *
+ * Collects codebase statistics including:
+ * - Total file count
+ * - Total lines of code
+ * - Total size in bytes
+ * - Largest files
+ * - File count by extension
+ *
+ * @module scanners/stats
+ */
+
 import fg from "fast-glob";
 import { readFileSync, statSync } from "fs";
 
+/** File statistics for the codebase */
 export interface FileStats {
+  /** Total number of files scanned */
   totalFiles: number;
+  /** Total lines of code */
   totalLines: number;
-  totalSize: number; // in bytes
+  /** Total size in bytes */
+  totalSize: number;
+  /** Largest files by line count */
   largestFiles: { path: string; lines: number }[];
+  /** File count by extension */
   filesByType: Record<string, number>;
 }
 
+/**
+ * Scans for file statistics in the codebase
+ *
+ * @param dir - Project root directory
+ * @returns File statistics summary
+ */
 export async function scanStats(dir: string): Promise<FileStats> {
   const files = await fg(
     [
@@ -69,6 +94,7 @@ export async function scanStats(dir: string): Promise<FileStats> {
   };
 }
 
+/** Formats bytes into human-readable string (B, KB, MB) */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

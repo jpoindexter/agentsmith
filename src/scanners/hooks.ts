@@ -1,14 +1,29 @@
+/**
+ * Custom Hooks Scanner
+ *
+ * Discovers custom React hooks in a codebase by scanning the hooks directory.
+ * Extracts hook names, file paths, and detects client-only requirements.
+ *
+ * @module scanners/hooks
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 import { basename } from "path";
 
+/** Custom hook information */
 export interface Hook {
+  /** Hook name (e.g., "useAuth") */
   name: string;
+  /** Relative file path */
   path: string;
+  /** Import path for use in code */
   importPath: string;
+  /** Whether the hook requires "use client" directive */
   isClientOnly: boolean;
 }
 
+/** Glob patterns for finding hook files */
 const HOOK_PATTERNS = [
   "src/hooks/**/*.ts",
   "src/hooks/**/*.tsx",
@@ -20,6 +35,16 @@ const HOOK_PATTERNS = [
   "!**/index.ts",  // Skip barrel exports
 ];
 
+/**
+ * Scans for custom React hooks in a project
+ *
+ * @param dir - Project root directory
+ * @returns Array of discovered hooks with metadata
+ *
+ * @example
+ * const hooks = await scanHooks('/path/to/project');
+ * // Returns: [{ name: 'useAuth', path: 'src/hooks/use-auth.ts', isClientOnly: true, ... }]
+ */
 export async function scanHooks(dir: string): Promise<Hook[]> {
   const files = await fg(HOOK_PATTERNS, {
     cwd: dir,
@@ -46,16 +71,17 @@ export async function scanHooks(dir: string): Promise<Hook[]> {
   return hooks.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Extracts hook names from file content (functions starting with "use") */
 function extractHookNames(content: string): string[] {
   const hooks: string[] = [];
 
-  // Match: export function useXxx
+  // export function useXxx
   const funcMatches = content.matchAll(/export\s+function\s+(use[A-Z][a-zA-Z0-9]*)/g);
   for (const match of funcMatches) {
     hooks.push(match[1]);
   }
 
-  // Match: export const useXxx
+  // export const useXxx
   const constMatches = content.matchAll(/export\s+const\s+(use[A-Z][a-zA-Z0-9]*)/g);
   for (const match of constMatches) {
     hooks.push(match[1]);
@@ -64,6 +90,7 @@ function extractHookNames(content: string): string[] {
   return [...new Set(hooks)];
 }
 
+/** Converts a file path to an import path */
 function toImportPath(file: string): string {
   const withoutExt = file.replace(/\.(tsx?|jsx?)$/, "");
   if (withoutExt.startsWith("src/")) {

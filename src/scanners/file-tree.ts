@@ -1,19 +1,38 @@
+/**
+ * File Tree Scanner
+ *
+ * Generates a visual file tree representation of the project structure.
+ * Collapses directories with many files and highlights key directories.
+ *
+ * @module scanners/file-tree
+ */
+
 import fg from "fast-glob";
 import { relative, dirname, basename } from "path";
 
+/** File tree node for visualization */
 export interface FileTreeNode {
+  /** File or directory name */
   name: string;
+  /** Node type */
   type: "file" | "directory";
+  /** Child nodes for directories */
   children?: FileTreeNode[];
+  /** File count for collapsed directories */
   fileCount?: number;
 }
 
+/** Complete file tree */
 export interface FileTree {
+  /** Root node */
   root: FileTreeNode;
+  /** Total file count */
   totalFiles: number;
+  /** Total directory count */
   totalDirs: number;
 }
 
+/** Patterns to ignore when building file tree */
 const IGNORE_PATTERNS = [
   "node_modules/**",
   ".git/**",
@@ -29,7 +48,7 @@ const IGNORE_PATTERNS = [
   "yarn.lock",
 ];
 
-// Key directories to always show expanded
+/** Key directories to always show expanded */
 const KEY_DIRS = [
   "src",
   "app",
@@ -46,6 +65,13 @@ const KEY_DIRS = [
   "providers",
 ];
 
+/**
+ * Scans directory and builds a file tree
+ *
+ * @param dir - Project root directory
+ * @param maxDepth - Maximum depth to scan (default: 3)
+ * @returns File tree with nodes and statistics
+ */
 export async function scanFileTree(dir: string, maxDepth: number = 3): Promise<FileTree> {
   const files = await fg(["**/*"], {
     cwd: dir,

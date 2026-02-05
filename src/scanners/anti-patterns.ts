@@ -1,20 +1,47 @@
+/**
+ * Anti-Pattern Generator
+ *
+ * Generates context-aware anti-patterns based on the detected codebase.
+ * These help AI coding assistants avoid common mistakes like:
+ * - Using hardcoded colors instead of design tokens
+ * - Creating new components instead of using existing ones
+ * - Incorrect cn() usage
+ * - Missing "use client" directives
+ *
+ * @module scanners/anti-patterns
+ */
+
 import type { Framework, Utilities, Tokens, Component } from "../types.js";
 
+/** Anti-pattern with wrong/right examples */
 export interface AntiPattern {
+  /** Pattern title */
   title: string;
+  /** Wrong code example */
   wrong: string;
+  /** Correct code example */
   right: string;
+  /** Explanation of why this matters */
   reason: string;
 }
 
+/** Anti-patterns analysis result */
 export interface AntiPatternsResult {
+  /** Detected anti-patterns */
   patterns: AntiPattern[];
+  /** Warning messages */
   warnings: string[];
 }
 
 /**
- * Generate anti-patterns section based on detected codebase patterns
- * These help AI avoid common mistakes
+ * Generates anti-patterns based on detected codebase patterns
+ *
+ * @param framework - Detected framework info
+ * @param utilities - Detected utilities
+ * @param tokens - Design tokens
+ * @param components - Discovered components
+ * @param hasDesignSystem - Whether a design system was detected
+ * @returns Anti-patterns with wrong/right examples
  */
 export function generateAntiPatterns(
   framework: Framework,

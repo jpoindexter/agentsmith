@@ -1,17 +1,35 @@
 /**
- * Compress code by extracting signatures only
- * Reduces token count by 40-50%
+ * Code Compression Utility
+ *
+ * Reduces token count by extracting only function signatures
+ * and type definitions, omitting implementation details.
+ * Achieves 40-50% reduction in token count.
+ *
+ * @module utils/compress
  */
 
+/** Compressed component information */
 export interface CompressedComponent {
+  /** Component name */
   name: string;
+  /** File path */
   path: string;
+  /** Function signature (without body) */
   signature: string;
+  /** Prop names if available */
   props?: string[];
 }
 
 /**
- * Extract function/component signature without implementation
+ * Extracts function/component signature without implementation body
+ *
+ * @param content - Full file content
+ * @param componentName - Name of the component to find
+ * @returns Signature string or generic fallback
+ *
+ * @example
+ * extractSignature(code, "Button")
+ * // "export function Button(props: ButtonProps): JSX.Element"
  */
 export function extractSignature(content: string, componentName: string): string {
   // Try to find the component definition
@@ -37,7 +55,10 @@ export function extractSignature(content: string, componentName: string): string
 }
 
 /**
- * Extract TypeScript interface/type for props
+ * Extracts TypeScript Props interface/type definition
+ *
+ * @param content - Full file content
+ * @returns Compressed props type definition or null
  */
 export function extractPropsType(content: string): string | null {
   // Match interface XxxProps { ... }
@@ -89,7 +110,11 @@ export function extractPropsType(content: string): string | null {
 }
 
 /**
- * Compress component content to signature only
+ * Compresses component content to signature and props only
+ *
+ * @param content - Full file content
+ * @param componentName - Name of the component
+ * @returns Compressed signature and props type
  */
 export function compressComponent(
   content: string,

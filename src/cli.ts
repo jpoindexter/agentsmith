@@ -1,5 +1,22 @@
 #!/usr/bin/env node
 
+/**
+ * agentsmith CLI
+ *
+ * Main entry point for the agentsmith command-line tool.
+ * Scans codebases and generates AGENTS.md files with comprehensive
+ * context for AI coding assistants.
+ *
+ * @example
+ * ```bash
+ * # Basic usage
+ * npx agentsmith
+ *
+ * # With options
+ * npx agentsmith --compact --copy
+ * ```
+ */
+
 import { cac } from "cac";
 import pc from "picocolors";
 import { scanComponents } from "./scanners/components.js";

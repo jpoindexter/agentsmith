@@ -1,17 +1,46 @@
+/**
+ * Database Schema Scanner
+ *
+ * Scans for database schema definitions from popular ORMs:
+ * - Prisma (schema.prisma files)
+ * - Drizzle ORM (TypeScript table definitions)
+ *
+ * Extracts model names, fields, and relationships for documentation.
+ *
+ * @module scanners/database
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 
+/** Represents a database model/table with its fields and relations */
 export interface DatabaseModel {
+  /** Model/table name */
   name: string;
+  /** Scalar field names (strings, numbers, dates, etc.) */
   fields: string[];
+  /** Relation field names (references to other models) */
   relations: string[];
 }
 
+/** Database schema information from ORM */
 export interface DatabaseSchema {
+  /** ORM provider detected */
   provider: "prisma" | "drizzle" | "unknown";
+  /** All discovered models */
   models: DatabaseModel[];
 }
 
+/**
+ * Scans for database schema and extracts model information
+ *
+ * @param dir - Project root directory
+ * @returns Database schema if found, null otherwise
+ *
+ * @example
+ * const schema = await scanDatabase('/path/to/project');
+ * // Returns: { provider: 'prisma', models: [{ name: 'User', fields: [...], relations: [...] }] }
+ */
 export async function scanDatabase(dir: string): Promise<DatabaseSchema | null> {
   // Try Prisma first
   const prismaSchema = await scanPrisma(dir);
@@ -24,6 +53,7 @@ export async function scanDatabase(dir: string): Promise<DatabaseSchema | null> 
   return null;
 }
 
+/** Scans for Prisma schema files and extracts models */
 async function scanPrisma(dir: string): Promise<DatabaseSchema | null> {
   const files = await fg(["prisma/schema.prisma", "schema.prisma"], {
     cwd: dir,
@@ -43,10 +73,14 @@ async function scanPrisma(dir: string): Promise<DatabaseSchema | null> {
   };
 }
 
+/**
+ * Extracts model definitions from Prisma schema content
+ * Parses model blocks and categorizes fields vs relations
+ */
 function extractPrismaModels(content: string): DatabaseModel[] {
   const models: DatabaseModel[] = [];
 
-  // Match model definitions: model ModelName { ... }
+  // model ModelName { ... }
   const modelMatches = content.matchAll(/model\s+(\w+)\s*\{([^}]+)\}/g);
 
   for (const match of modelMatches) {
@@ -88,8 +122,8 @@ function extractPrismaModels(content: string): DatabaseModel[] {
   return models;
 }
 
+/** Scans for Drizzle ORM schema files and extracts table definitions */
 async function scanDrizzle(dir: string): Promise<DatabaseSchema | null> {
-  // Look for Drizzle schema files in common locations
   const files = await fg(
     [
       "**/schema.ts",
@@ -130,11 +164,14 @@ async function scanDrizzle(dir: string): Promise<DatabaseSchema | null> {
   };
 }
 
+/**
+ * Extracts table definitions from Drizzle ORM schema content
+ * Supports pgTable, mysqlTable, and sqliteTable definitions
+ */
 function extractDrizzleTables(content: string): DatabaseModel[] {
   const models: DatabaseModel[] = [];
 
-  // Match table definitions: export const tableName = pgTable('table_name', { ... })
-  // Supports: pgTable, mysqlTable, sqliteTable
+  // export const tableName = pgTable('table_name', { ... })
   const tableRegex =
     /(?:export\s+)?const\s+(\w+)\s*=\s*(?:pg|mysql|sqlite)Table\s*\(\s*['"`](\w+)['"`]\s*,\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/g;
 

@@ -1,8 +1,21 @@
+/**
+ * Security Audit Scanner
+ *
+ * Performs security analysis using npm audit:
+ * - Vulnerability detection by severity (critical, high, moderate, low)
+ * - Outdated package detection
+ * - Lockfile verification
+ *
+ * @module scanners/security
+ */
+
 import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
+/** Security audit results */
 export interface SecurityAudit {
+  /** Vulnerability counts by severity */
   vulnerabilities: {
     critical: number;
     high: number;
@@ -11,16 +24,31 @@ export interface SecurityAudit {
     info: number;
     total: number;
   };
+  /** Packages with newer versions available */
   outdatedPackages: Array<{
     name: string;
     current: string;
     wanted: string;
     latest: string;
   }>;
+  /** Whether a package lockfile exists */
   hasLockfile: boolean;
+  /** Error message if audit failed */
   auditError?: string;
 }
 
+/**
+ * Runs npm audit and checks for outdated packages
+ *
+ * @param dir - Project root directory
+ * @returns Security audit results or null if no package.json
+ *
+ * @example
+ * const audit = await scanSecurity('/path/to/project');
+ * if (audit?.vulnerabilities.critical > 0) {
+ *   console.warn('Critical vulnerabilities found!');
+ * }
+ */
 export async function scanSecurity(dir: string): Promise<SecurityAudit | null> {
   // Check if package.json exists
   const pkgPath = join(dir, "package.json");
@@ -128,6 +156,7 @@ export async function scanSecurity(dir: string): Promise<SecurityAudit | null> {
   return result;
 }
 
+/** Formats security audit results as markdown documentation */
 export function formatSecurityAudit(audit: SecurityAudit): string {
   const lines: string[] = [];
 

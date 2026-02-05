@@ -1,14 +1,37 @@
+/**
+ * Environment Variable Scanner
+ *
+ * Discovers environment variables from:
+ * - .env.example files
+ * - Zod validation schemas (src/lib/env)
+ * - process.env usage in source files
+ *
+ * @module scanners/env-vars
+ */
+
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
+/** Environment variable definition */
 export interface EnvVar {
+  /** Variable name (e.g., "DATABASE_URL") */
   name: string;
+  /** Whether the variable is required */
   required: boolean;
+  /** Whether a default value is provided */
   hasDefault: boolean;
+  /** Description from comments */
   description?: string;
+  /** Category (e.g., "database", "auth") */
   category?: string;
 }
 
+/**
+ * Scans for environment variable definitions
+ *
+ * @param dir - Project root directory
+ * @returns Array of discovered environment variables
+ */
 export async function scanEnvVars(dir: string): Promise<EnvVar[]> {
   const envVars: EnvVar[] = [];
   const seenVars = new Set<string>();
@@ -47,6 +70,7 @@ export async function scanEnvVars(dir: string): Promise<EnvVar[]> {
   return envVars;
 }
 
+/** Parses environment variables from .env.example file format */
 function parseEnvExample(content: string, envVars: EnvVar[], seenVars: Set<string>): void {
   const lines = content.split("\n");
   let currentCategory: string | undefined;
@@ -82,6 +106,7 @@ function parseEnvExample(content: string, envVars: EnvVar[], seenVars: Set<strin
   }
 }
 
+/** Parses environment variables from Zod validation schemas */
 function parseZodValidation(content: string, envVars: EnvVar[], seenVars: Set<string>): void {
   // Look for z.string() patterns with env var names
   const patterns = [

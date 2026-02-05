@@ -1,21 +1,44 @@
+/**
+ * Import Graph Scanner
+ *
+ * Analyzes import relationships across the codebase to identify:
+ * - Hub files (most imported, high-impact changes)
+ * - Circular dependencies (potential issues)
+ * - Unused components (dead code candidates)
+ * - External dependency usage patterns
+ *
+ * @module scanners/imports
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 import { basename, dirname, relative, resolve } from "path";
 
+/** Import information for a single file */
 export interface ImportInfo {
+  /** Source file path */
   source: string;
+  /** Files this file imports */
   imports: string[];
+  /** Files that import this file */
   importedBy: string[];
 }
 
+/** Complete import graph analysis results */
 export interface ImportGraph {
+  /** Map of file path to import info */
   files: Map<string, ImportInfo>;
+  /** Files imported by many others (changes have wide impact) */
   hubFiles: Array<{ file: string; importedByCount: number }>;
+  /** Detected circular import chains */
   circularDeps: Array<{ cycle: string[] }>;
-  externalDeps: Map<string, number>; // package -> usage count
-  unusedFiles: string[]; // Files that are never imported
+  /** External package usage counts */
+  externalDeps: Map<string, number>;
+  /** Component files that are never imported (potential dead code) */
+  unusedFiles: string[];
 }
 
+/** Glob patterns for scanning source files */
 const FILE_PATTERNS = [
   "src/**/*.{ts,tsx,js,jsx}",
   "app/**/*.{ts,tsx,js,jsx}",
@@ -27,6 +50,17 @@ const FILE_PATTERNS = [
   "!**/node_modules/**",
 ];
 
+/**
+ * Scans and analyzes import relationships in a codebase
+ *
+ * @param dir - Project root directory
+ * @returns Import graph with hub files, circular deps, and unused files
+ *
+ * @example
+ * const graph = await scanImports('/path/to/project');
+ * console.log(graph.hubFiles); // Most imported files
+ * console.log(graph.circularDeps); // Circular dependency chains
+ */
 export async function scanImports(dir: string): Promise<ImportGraph> {
   const files = await fg(FILE_PATTERNS, {
     cwd: dir,
@@ -126,6 +160,7 @@ export async function scanImports(dir: string): Promise<ImportGraph> {
   };
 }
 
+/** Extracts internal and external imports from file content */
 function extractImports(content: string, file: string, dir: string): { internal: string[]; external: string[] } {
   const internal: string[] = [];
   const external: string[] = [];
@@ -146,6 +181,7 @@ function extractImports(content: string, file: string, dir: string): { internal:
   return { internal: [...new Set(internal)], external: [...new Set(external)] };
 }
 
+/** Categorizes an import as internal or external and resolves paths */
 function categorizeImport(
   importPath: string,
   file: string,
@@ -189,6 +225,7 @@ function categorizeImport(
   internal.push(resolved);
 }
 
+/** Detects circular dependencies using depth-first search */
 function findCircularDeps(graph: Map<string, ImportInfo>): Array<{ cycle: string[] }> {
   const cycles: Array<{ cycle: string[] }> = [];
   const visited = new Set<string>();
@@ -231,6 +268,7 @@ function findCircularDeps(graph: Map<string, ImportInfo>): Array<{ cycle: string
   return cycles.slice(0, 10); // Limit to 10 cycles
 }
 
+/** Formats import graph analysis as markdown documentation */
 export function formatImportGraph(graph: ImportGraph): string {
   const lines: string[] = [];
 

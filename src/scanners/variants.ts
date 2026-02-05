@@ -1,12 +1,36 @@
+/**
+ * CVA Variant Scanner
+ *
+ * Extracts class-variance-authority (CVA) variant configurations
+ * from React components. CVA is used to define component variants
+ * like size, color, and style options.
+ *
+ * @module scanners/variants
+ */
+
 import fg from "fast-glob";
 import { readFileSync } from "fs";
 
+/** CVA variant configuration for a component */
 export interface ComponentVariant {
+  /** Component name */
   component: string;
+  /** Variant options (e.g., { variant: ["default", "destructive"], size: ["sm", "md", "lg"] }) */
   variants: Record<string, string[]>;
+  /** Default variant values if specified */
   defaultVariants?: Record<string, string>;
 }
 
+/**
+ * Scans for CVA variant definitions in components
+ *
+ * @param dir - Project root directory
+ * @returns Array of component variant configurations
+ *
+ * @example
+ * const variants = await scanVariants('/path/to/project');
+ * // Returns: [{ component: 'Button', variants: { variant: ['default', 'destructive'], size: ['sm', 'lg'] } }]
+ */
 export async function scanVariants(dir: string): Promise<ComponentVariant[]> {
   const files = await fg(["src/components/**/*.tsx", "components/**/*.tsx"], {
     cwd: dir,
@@ -35,6 +59,7 @@ export async function scanVariants(dir: string): Promise<ComponentVariant[]> {
   return variants;
 }
 
+/** Parses variant options from CVA variants block content */
 function extractVariantsFromBlock(file: string, variantsContent: string): ComponentVariant | null {
   const component = getComponentNameFromFile(file);
   const result: ComponentVariant = {
@@ -96,6 +121,7 @@ function extractVariantsFromBlock(file: string, variantsContent: string): Compon
   return Object.keys(result.variants).length > 0 ? result : null;
 }
 
+/** Extracts component name from file path, converting kebab-case to PascalCase */
 function getComponentNameFromFile(file: string): string {
   const parts = file.split("/");
   const fileName = parts.pop() || "";
