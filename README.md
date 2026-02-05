@@ -99,6 +99,9 @@ agentsmith --format json
 # Analyze a remote GitHub repository
 agentsmith --remote https://github.com/user/repo
 
+# Watch mode - auto-regenerate on file changes
+agentsmith --watch
+
 # Combine options
 agentsmith --compact --json --force
 ```
@@ -141,22 +144,32 @@ The `exclude` patterns are added to the default exclusions and apply to componen
 | **Framework** | Next.js, Remix, Vite with version and router type |
 | **Statistics** | Total files, lines, size, largest files |
 | **Existing docs** | CLAUDE.md, .ai/ folder, .cursorrules |
+| **File Tree** | Project structure visualization |
+| **Import Graph** | Hub files (most imported), circular dependencies |
+| **TypeScript Types** | Props interfaces, API types, model types |
+| **Anti-Patterns** | Common AI mistakes with WRONG/RIGHT examples |
 
 ## Output
 
 The generated AGENTS.md includes:
 
 - **Project Overview** - Framework, language, styling, file count, line count
+- **Project Structure** - File tree visualization
 - **Codebase Statistics** - Largest files in the project
 - **Critical Rules** - Non-negotiable rules (use existing components, use tokens)
 - **Components** - Full inventory with props and JSDoc descriptions
+- **Most Imported Files** - Hub files that have wide impact when changed
+- **Key Dependencies** - Most-used external packages
+- **Circular Dependencies** - Warnings about problematic imports
 - **Preferred Imports** - Barrel imports for cleaner code
+- **Component Props Types** - TypeScript interfaces for component props
 - **Component Dependencies** - What each component imports
 - **Component Variants** - CVA options for each component
 - **Custom Hooks** - With client-only markers
 - **API Routes** - Grouped by path (Users, Auth, Admin, etc.) with methods and auth status
 - **Database Models** - Prisma models with fields and relations
 - **Environment Variables** - Required vs optional
+- **Common AI Mistakes** - Anti-patterns with WRONG/RIGHT code examples
 - **Code Patterns** - Detected patterns with usage examples
 - **Design Tokens** - Color tokens with usage guidance
 - **Commands** - npm scripts for dev, build, test, db, etc.
@@ -203,6 +216,19 @@ agentsmith --compress
 ```
 
 Compress mode keeps component names and props but strips implementation details.
+
+## Watch Mode
+
+Keep AGENTS.md updated automatically during development:
+
+```bash
+agentsmith --watch
+
+  ✓ Generated AGENTS.md
+  👀 Watching for changes... (Ctrl+C to stop)
+```
+
+Watches `src/`, `components/`, and `lib/` directories. Regenerates when files change.
 
 ## Remote Repository Analysis
 
