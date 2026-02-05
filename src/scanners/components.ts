@@ -4,12 +4,38 @@ import { basename, dirname, relative } from "path";
 import type { Component } from "../types.js";
 
 const COMPONENT_PATTERNS = [
-  "**/components/**/*.tsx",
-  "**/components/**/*.jsx",
+  // Primary: src/components folder (reusable components)
+  "src/components/**/*.tsx",
+  "src/components/**/*.jsx",
+  "components/**/*.tsx",
+  "components/**/*.jsx",
+  // Exclusions
   "!**/node_modules/**",
   "!**/*.test.*",
   "!**/*.spec.*",
   "!**/*.stories.*",
+];
+
+// Next.js special files to skip (not reusable components)
+const SKIP_FILES = [
+  "page.tsx",
+  "page.jsx",
+  "layout.tsx",
+  "layout.jsx",
+  "loading.tsx",
+  "loading.jsx",
+  "error.tsx",
+  "error.jsx",
+  "not-found.tsx",
+  "not-found.jsx",
+  "template.tsx",
+  "template.jsx",
+  "default.tsx",
+  "default.jsx",
+  "route.ts",
+  "route.js",
+  "middleware.ts",
+  "middleware.js",
 ];
 
 export async function scanComponents(dir: string): Promise<Component[]> {
@@ -21,6 +47,10 @@ export async function scanComponents(dir: string): Promise<Component[]> {
   const components: Component[] = [];
 
   for (const file of files) {
+    // Skip Next.js special files
+    const fileName = basename(file);
+    if (SKIP_FILES.includes(fileName)) continue;
+
     const content = readFileSync(`${dir}/${file}`, "utf-8");
     const exports = extractExports(content);
 
