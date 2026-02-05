@@ -308,13 +308,6 @@ With AGENTS.md:
 
 agentsmith is specifically designed for the AGENTS.md standard with opinionated rules about component reuse and design tokens.
 
-## Works great with
-
-- [Fabrk](https://fabrk.dev) - SaaS boilerplate with 62+ components
-- [indx](https://indx.fabrk.dev) - AI-powered semantic search
-- Any Next.js + Tailwind + shadcn/ui project
-- Any React project with components in `/components`
-
 ## License
 
 MIT
