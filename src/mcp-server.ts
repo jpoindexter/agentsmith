@@ -20,6 +20,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { existsSync, readFileSync } from "fs";
 import { join, resolve } from "path";
@@ -51,6 +53,31 @@ import { extractZodSchemasFromAST } from "./scanners/ast-schema-parser.js";
 import { generateAgentsMd } from "./generator.js";
 import { estimateTokens, formatTokens } from "./utils/tokens.js";
 
+// Cache for scan results (invalidated every 5 minutes or on explicit clear)
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  directory: string;
+}
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const scanCache = new Map<string, CacheEntry<any>>();
+
+function getCached<T>(key: string, directory: string): T | null {
+  const entry = scanCache.get(key);
+  if (!entry) return null;
+  if (entry.directory !== directory) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    scanCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache<T>(key: string, directory: string, data: T): void {
+  scanCache.set(key, { data, timestamp: Date.now(), directory });
+}
+
 const server = new Server(
   {
     name: "agentsmith",
@@ -59,6 +86,7 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      resources: {},
     },
   }
 );
@@ -342,6 +370,222 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+// Define resources (live subscriptions)
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: "agents://agents-md",
+        name: "AGENTS.md",
+        description: "Auto-generated AGENTS.md context file",
+        mimeType: "text/markdown",
+      },
+      {
+        uri: "agents://api-schemas",
+        name: "API Schemas",
+        description: "All API route schemas (Zod, TypeScript, tRPC)",
+        mimeType: "application/json",
+      },
+      {
+        uri: "agents://database-schema",
+        name: "Database Schema",
+        description: "Database models with fields and relations",
+        mimeType: "application/json",
+      },
+      {
+        uri: "agents://graphql-schemas",
+        name: "GraphQL Schemas",
+        description: "GraphQL type definitions",
+        mimeType: "application/json",
+      },
+      {
+        uri: "agents://complexity-report",
+        name: "Complexity Report",
+        description: "Codebase complexity analysis and AI recommendations",
+        mimeType: "application/json",
+      },
+    ],
+  };
+});
+
+// Handle resource reads
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const uri = request.params.uri;
+
+  // Resources require a directory parameter via arguments
+  const directory = request.params.arguments?.directory as string;
+  if (!directory) {
+    return {
+      contents: [{
+        uri,
+        mimeType: "text/plain",
+        text: "Error: 'directory' argument required. Example: { directory: '/path/to/project' }",
+      }],
+    };
+  }
+
+  const dir = resolve(directory);
+  if (!existsSync(dir)) {
+    return {
+      contents: [{
+        uri,
+        mimeType: "text/plain",
+        text: `Error: Directory not found: ${dir}`,
+      }],
+    };
+  }
+
+  try {
+    switch (uri) {
+      case "agents://agents-md": {
+        // Check cache first
+        let content = getCached<string>("agents-md", dir);
+
+        if (!content) {
+          // Generate full AGENTS.md
+          const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, graphqlSchemas] = await Promise.all([
+            scanComponents(dir, []),
+            scanTokens(dir),
+            detectFramework(dir),
+            scanHooks(dir),
+            scanUtilities(dir),
+            scanCommands(dir),
+            scanExistingContext(dir),
+            scanVariants(dir),
+            scanApiRoutes(dir),
+            scanEnvVars(dir),
+            scanPatterns(dir),
+            scanDatabase(dir),
+            scanStats(dir),
+            scanBarrels(dir),
+            scanDependencies(dir),
+            scanFileTree(dir),
+            scanImports(dir),
+            scanTypes(dir),
+            scanGraphQL(dir),
+          ]);
+
+          const antiPatterns = generateAntiPatterns(framework, utilities, tokens, components, utilities.hasMode);
+          const testCoverage = await scanTestCoverage(dir, components);
+
+          content = generateAgentsMd(
+            { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage, graphqlSchemas },
+            { minimal: false, compact: false }
+          );
+
+          setCache("agents-md", dir, content);
+        }
+
+        return {
+          contents: [{
+            uri,
+            mimeType: "text/markdown",
+            text: content,
+          }],
+        };
+      }
+
+      case "agents://api-schemas": {
+        let routes = getCached<Awaited<ReturnType<typeof scanApiRoutes>>>("api-routes", dir);
+
+        if (!routes) {
+          routes = await scanApiRoutes(dir);
+          setCache("api-routes", dir, routes);
+        }
+
+        const schemas = routes
+          .filter(r => r.requestSchema || r.responseSchema || r.querySchema)
+          .map(r => ({
+            path: r.path,
+            methods: r.methods,
+            requestSchema: r.requestSchema,
+            responseSchema: r.responseSchema,
+            querySchema: r.querySchema,
+          }));
+
+        return {
+          contents: [{
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(schemas, null, 2),
+          }],
+        };
+      }
+
+      case "agents://database-schema": {
+        let database = getCached<Awaited<ReturnType<typeof scanDatabase>>>("database", dir);
+
+        if (!database) {
+          database = await scanDatabase(dir);
+          setCache("database", dir, database);
+        }
+
+        return {
+          contents: [{
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(database, null, 2),
+          }],
+        };
+      }
+
+      case "agents://graphql-schemas": {
+        let schemas = getCached<Awaited<ReturnType<typeof scanGraphQL>>>("graphql", dir);
+
+        if (!schemas) {
+          schemas = await scanGraphQL(dir);
+          setCache("graphql", dir, schemas);
+        }
+
+        // Convert Map to object for JSON
+        const schemasObj = Object.fromEntries(schemas);
+
+        return {
+          contents: [{
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(schemasObj, null, 2),
+          }],
+        };
+      }
+
+      case "agents://complexity-report": {
+        let analysis = getCached<Awaited<ReturnType<typeof analyzeComplexity>>>("complexity", dir);
+
+        if (!analysis) {
+          analysis = await analyzeComplexity(dir);
+          setCache("complexity", dir, analysis);
+        }
+
+        return {
+          contents: [{
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(analysis, null, 2),
+          }],
+        };
+      }
+
+      default:
+        return {
+          contents: [{
+            uri,
+            mimeType: "text/plain",
+            text: `Unknown resource: ${uri}`,
+          }],
+        };
+    }
+  } catch (error) {
+    return {
+      contents: [{
+        uri,
+        mimeType: "text/plain",
+        text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+      }],
+    };
+  }
+});
+
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
@@ -521,7 +765,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Granular scanner handlers
       case "scan_api_routes": {
         const dir = resolve(args?.directory as string);
-        const routes = await scanApiRoutes(dir);
+
+        let routes = getCached<Awaited<ReturnType<typeof scanApiRoutes>>>("api-routes", dir);
+        if (!routes) {
+          routes = await scanApiRoutes(dir);
+          setCache("api-routes", dir, routes);
+        }
 
         const output = routes.map(r => {
           const methods = r.methods.join(", ");
@@ -548,7 +797,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "scan_database": {
         const dir = resolve(args?.directory as string);
-        const database = await scanDatabase(dir);
+
+        let database = getCached<Awaited<ReturnType<typeof scanDatabase>>>("database", dir);
+        if (!database) {
+          database = await scanDatabase(dir);
+          setCache("database", dir, database);
+        }
 
         if (!database) {
           return {
@@ -597,7 +851,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "analyze_complexity": {
         const dir = resolve(args?.directory as string);
-        const analysis = await analyzeComplexity(dir);
+
+        let analysis = getCached<Awaited<ReturnType<typeof analyzeComplexity>>>("complexity", dir);
+        if (!analysis) {
+          analysis = await analyzeComplexity(dir);
+          setCache("complexity", dir, analysis);
+        }
 
         const areas = analysis.areas.slice(0, 5).map(a => {
           const icon = a.level === "high" ? "🔴" : a.level === "medium" ? "🟡" : "🟢";
