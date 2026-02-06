@@ -43,6 +43,7 @@ import { generateAntiPatterns, formatAntiPatterns } from "./scanners/anti-patter
 import { scanTestCoverage } from "./scanners/tests.js";
 import { scanSecurity, formatSecurityAudit } from "./scanners/security.js";
 import { detectMonorepo, formatMonorepoOverview } from "./scanners/monorepo.js";
+import { scanGraphQL } from "./scanners/graphql.js";
 import { generateAgentsMd } from "./generator.js";
 import { generateAgentsIndex } from "./json-generator.js";
 import { estimateTokens, formatTokens, getContextUsage } from "./utils/tokens.js";
@@ -135,7 +136,7 @@ cli
             const pkgConfig = loadConfig(pkg.path);
             const pkgExcludePatterns = pkgConfig.exclude || [];
 
-            const [pkgComponents, pkgTokens, pkgFramework, pkgHooks, pkgUtilities, pkgCommands, pkgExistingContext, pkgVariants, pkgApiRoutes, pkgEnvVars, pkgPatterns, pkgDatabase, pkgStats, pkgBarrels, pkgDependencies, pkgFileTree, pkgImportGraph, pkgTypeExports] = await Promise.all([
+            const [pkgComponents, pkgTokens, pkgFramework, pkgHooks, pkgUtilities, pkgCommands, pkgExistingContext, pkgVariants, pkgApiRoutes, pkgEnvVars, pkgPatterns, pkgDatabase, pkgStats, pkgBarrels, pkgDependencies, pkgFileTree, pkgImportGraph, pkgTypeExports, pkgGraphQLSchemas] = await Promise.all([
               scanComponents(pkg.path, pkgExcludePatterns),
               scanTokens(pkg.path),
               detectFramework(pkg.path),
@@ -154,13 +155,14 @@ cli
               scanFileTree(pkg.path),
               scanImports(pkg.path),
               scanTypes(pkg.path),
+              scanGraphQL(pkg.path),
             ]);
 
             const pkgAntiPatterns = generateAntiPatterns(pkgFramework, pkgUtilities, pkgTokens, pkgComponents, pkgUtilities.hasMode);
             const pkgTestCoverage = await scanTestCoverage(pkg.path, pkgComponents);
 
             const pkgContent = generateAgentsMd(
-              { components: pkgComponents, tokens: pkgTokens, framework: pkgFramework, hooks: pkgHooks, utilities: pkgUtilities, commands: pkgCommands, existingContext: pkgExistingContext, variants: pkgVariants, apiRoutes: pkgApiRoutes, envVars: pkgEnvVars, patterns: pkgPatterns, database: pkgDatabase, stats: pkgStats, barrels: pkgBarrels, dependencies: pkgDependencies, fileTree: pkgFileTree, importGraph: pkgImportGraph, typeExports: pkgTypeExports, antiPatterns: pkgAntiPatterns, testCoverage: pkgTestCoverage },
+              { components: pkgComponents, tokens: pkgTokens, framework: pkgFramework, hooks: pkgHooks, utilities: pkgUtilities, commands: pkgCommands, existingContext: pkgExistingContext, variants: pkgVariants, apiRoutes: pkgApiRoutes, envVars: pkgEnvVars, patterns: pkgPatterns, database: pkgDatabase, stats: pkgStats, barrels: pkgBarrels, dependencies: pkgDependencies, fileTree: pkgFileTree, importGraph: pkgImportGraph, typeExports: pkgTypeExports, antiPatterns: pkgAntiPatterns, testCoverage: pkgTestCoverage, graphqlSchemas: pkgGraphQLSchemas },
               { compact: options.compact, compress: options.compress, minimal: options.minimal }
             );
 
@@ -203,7 +205,7 @@ cli
       const typeExports = await scanTypes(targetDir);
 
       // Run remaining scanners in parallel
-      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph] = await Promise.all([
+      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, graphqlSchemas] = await Promise.all([
         scanComponents(targetDir, excludePatterns),
         scanTokens(targetDir),
         detectFramework(targetDir),
@@ -221,6 +223,7 @@ cli
         scanDependencies(targetDir),
         scanFileTree(targetDir),
         scanImports(targetDir),
+        scanGraphQL(targetDir),
       ]);
 
       // Generate anti-patterns based on detected features
@@ -244,6 +247,9 @@ cli
       console.log(pc.green(`  ✓ Found ${hooks.length} custom hooks`));
       if (apiRoutes.length > 0) {
         console.log(pc.green(`  ✓ Found ${apiRoutes.length} API routes`));
+      }
+      if (graphqlSchemas && graphqlSchemas.size > 0) {
+        console.log(pc.green(`  ✓ Found ${graphqlSchemas.size} GraphQL schemas`));
       }
       if (envVars.length > 0) {
         console.log(pc.green(`  ✓ Found ${envVars.length} environment variables`));
@@ -322,7 +328,7 @@ cli
 
       // Generate AGENTS.md content
       let content = generateAgentsMd(
-        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage, securityAudit: securityAudit || undefined, aiRecommendations },
+        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage, securityAudit: securityAudit || undefined, aiRecommendations, graphqlSchemas },
         { compact: options.compact, compress: options.compress, minimal: options.minimal, includeTree: options.tree, xml: options.xml }
       );
 
@@ -425,7 +431,7 @@ cli
         // Generate JSON index if requested (not with --xml)
         if (options.json && !options.xml) {
           const jsonContent = generateAgentsIndex(
-            { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage },
+            { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage, graphqlSchemas },
             content
           );
           const jsonPath = join(writeDir, outputFile.replace(".md", ".index.json"));

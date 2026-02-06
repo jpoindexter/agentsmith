@@ -40,7 +40,7 @@ export interface GeneratorOptions {
  * writeFileSync('AGENTS.md', content);
  */
 export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
-  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, aiRecommendations } = result;
+  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, aiRecommendations, graphqlSchemas } = result;
   const { compact = false, compress = false, minimal = false, includeTree = false, xml = false } = options;
 
   // Minimal mode: ultra-compact output (~1K tokens)
@@ -470,6 +470,107 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
     }
   }
 
+  // GraphQL Schemas Section
+  if (graphqlSchemas && graphqlSchemas.size > 0) {
+    lines.push("## GraphQL Schemas");
+    lines.push("");
+    lines.push(`${graphqlSchemas.size} GraphQL type${graphqlSchemas.size === 1 ? "" : "s"} defined:`);
+    lines.push("");
+
+    // Group schemas by category
+    const types: ApiSchema[] = [];
+    const inputs: ApiSchema[] = [];
+    const enums: ApiSchema[] = [];
+
+    for (const schema of graphqlSchemas.values()) {
+      if (schema.name?.endsWith("Input")) {
+        inputs.push(schema);
+      } else if (schema.fields.every(f => f.type === "enum")) {
+        enums.push(schema);
+      } else {
+        types.push(schema);
+      }
+    }
+
+    // Display Types
+    if (types.length > 0 && !minimal) {
+      lines.push(`### Types (${types.length})`);
+      lines.push("");
+      for (const schema of types.slice(0, compact ? 10 : 20)) {
+        lines.push(`**${schema.name}**`);
+        if (!compress) {
+          lines.push("```graphql");
+          lines.push(`type ${schema.name} {`);
+          for (const field of schema.fields.slice(0, compact ? 5 : 10)) {
+            const optional = field.isOptional ? "" : "!";
+            lines.push(`  ${field.name}: ${field.type}${optional}`);
+          }
+          if (schema.fields.length > (compact ? 5 : 10)) {
+            lines.push(`  # ... and ${schema.fields.length - (compact ? 5 : 10)} more fields`);
+          }
+          lines.push("}");
+          lines.push("```");
+        } else {
+          // Compress mode - just show field names
+          const fieldList = schema.fields.slice(0, 5).map(f => f.name).join(", ");
+          const more = schema.fields.length > 5 ? `, +${schema.fields.length - 5} more` : "";
+          lines.push(`  - ${fieldList}${more}`);
+        }
+        lines.push("");
+      }
+      if (types.length > (compact ? 10 : 20)) {
+        lines.push(`... and ${types.length - (compact ? 10 : 20)} more types`);
+        lines.push("");
+      }
+    }
+
+    // Display Inputs
+    if (inputs.length > 0 && !minimal) {
+      lines.push(`### Inputs (${inputs.length})`);
+      lines.push("");
+      for (const schema of inputs.slice(0, compact ? 8 : 15)) {
+        lines.push(`**${schema.name}**`);
+        if (!compress) {
+          lines.push("```graphql");
+          lines.push(`input ${schema.name} {`);
+          for (const field of schema.fields.slice(0, compact ? 5 : 10)) {
+            const optional = field.isOptional ? "" : "!";
+            lines.push(`  ${field.name}: ${field.type}${optional}`);
+          }
+          if (schema.fields.length > (compact ? 5 : 10)) {
+            lines.push(`  # ... and ${schema.fields.length - (compact ? 5 : 10)} more fields`);
+          }
+          lines.push("}");
+          lines.push("```");
+        } else {
+          // Compress mode
+          const fieldList = schema.fields.slice(0, 5).map(f => f.name).join(", ");
+          const more = schema.fields.length > 5 ? `, +${schema.fields.length - 5} more` : "";
+          lines.push(`  - ${fieldList}${more}`);
+        }
+        lines.push("");
+      }
+      if (inputs.length > (compact ? 8 : 15)) {
+        lines.push(`... and ${inputs.length - (compact ? 8 : 15)} more inputs`);
+        lines.push("");
+      }
+    }
+
+    // Display Enums
+    if (enums.length > 0) {
+      lines.push(`### Enums (${enums.length})`);
+      lines.push("");
+      for (const schema of enums.slice(0, 20)) {
+        const values = schema.fields.map(f => f.name).join(" | ");
+        lines.push(`- **${schema.name}**: ${values}`);
+      }
+      if (enums.length > 20) {
+        lines.push(`- ... and ${enums.length - 20} more`);
+      }
+      lines.push("");
+    }
+  }
+
   // Database Models Section
   if (database && database.models.length > 0) {
     lines.push("## Database Models");
@@ -873,7 +974,7 @@ function formatSchema(schema: ApiSchema, compact: boolean = false): string {
  * TL;DR + Rules with inline examples + Component names only
  */
 function generateMinimalOutput(result: ScanResult, options: GeneratorOptions): string {
-  const { components, framework, utilities, hooks, apiRoutes, database, importGraph } = result;
+  const { components, framework, utilities, hooks, apiRoutes, database, importGraph, graphqlSchemas } = result;
   const lines: string[] = [];
 
   // Header
@@ -893,6 +994,7 @@ function generateMinimalOutput(result: ScanResult, options: GeneratorOptions): s
   if (utilities.hasCn) lines.push(`**Utility**: \`cn()\` from \`${utilities.cnPath}\``);
   if (utilities.hasMode) lines.push(`**Design**: \`mode\` from \`${utilities.modePath}\``);
   if (database) lines.push(`**Database**: ${database.provider} (${database.models.length} models)`);
+  if (graphqlSchemas && graphqlSchemas.size > 0) lines.push(`**GraphQL**: ${graphqlSchemas.size} schemas`);
   lines.push("");
 
   // Rules (compact with inline examples)
@@ -950,7 +1052,7 @@ function generateMinimalOutput(result: ScanResult, options: GeneratorOptions): s
  * Generate XML-structured output (industry standard, matches Repomix)
  */
 function generateXmlOutput(result: ScanResult): string {
-  const { components, tokens, framework, utilities, hooks, apiRoutes, database, importGraph } = result;
+  const { components, tokens, framework, utilities, hooks, apiRoutes, database, importGraph, graphqlSchemas } = result;
   const lines: string[] = [];
 
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
@@ -967,6 +1069,7 @@ function generateXmlOutput(result: ScanResult): string {
   if (utilities.hasCn) lines.push(`    <utility name="cn" path="${escapeXml(utilities.cnPath || '')}" />`);
   if (utilities.hasMode) lines.push(`    <utility name="mode" path="${escapeXml(utilities.modePath || '')}" />`);
   if (database) lines.push(`    <database provider="${database.provider}" models="${database.models.length}" />`);
+  if (graphqlSchemas && graphqlSchemas.size > 0) lines.push(`    <graphql schemas="${graphqlSchemas.size}" />`);
   lines.push('  </summary>');
   lines.push('');
 
@@ -1042,6 +1145,17 @@ function generateXmlOutput(result: ScanResult): string {
       lines.push(`    <route path="${escapeXml(route.path)}" methods="${methods}"${route.isProtected ? ' protected="true"' : ''} />`);
     }
     lines.push('  </api-routes>');
+    lines.push('');
+  }
+
+  // GraphQL schemas
+  if (graphqlSchemas && graphqlSchemas.size > 0) {
+    lines.push(`  <graphql-schemas count="${graphqlSchemas.size}">`);
+    for (const schema of Array.from(graphqlSchemas.values()).slice(0, 15)) {
+      const fields = schema.fields.slice(0, 6).map(f => f.name).join(", ");
+      lines.push(`    <schema name="${escapeXml(schema.name || 'unknown')}" fields="${escapeXml(fields)}" />`);
+    }
+    lines.push('  </graphql-schemas>');
     lines.push('');
   }
 

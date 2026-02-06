@@ -215,8 +215,8 @@ export interface ApiRoute {
 
 /** API schema information */
 export interface ApiSchema {
-  /** Schema source (zod, typescript, or unknown) */
-  source: "zod" | "typescript" | "unknown";
+  /** Schema source (zod, typescript, graphql, or unknown) */
+  source: "zod" | "typescript" | "graphql" | "unknown";
   /** Type/schema name if defined */
   name?: string;
   /** Extracted fields with types */
@@ -385,6 +385,8 @@ export interface BarrelExport {
 
 /** Import graph analysis results */
 export interface ImportGraph {
+  /** Map of file path to import info */
+  files: Map<string, any>;
   /** Most imported files (hubs) */
   hubFiles: Array<{ file: string; importedByCount: number }>;
   /** Circular dependency cycles */
@@ -473,7 +475,8 @@ export interface SecurityAudit {
 // AI Configuration & Complexity
 // ============================================================================
 
-export type { AIRecommendations, AreaComplexity, FileComplexity, ComplexityLevel } from "./scanners/complexity.js";
+export type { AreaComplexity, FileComplexity, ComplexityLevel } from "./scanners/complexity.js";
+import type { AIRecommendations } from "./scanners/complexity.js";
 
 // ============================================================================
 // Main Result Type
@@ -525,4 +528,6 @@ export interface ScanResult {
   securityAudit?: SecurityAudit;
   /** AI configuration recommendations (optional) */
   aiRecommendations?: AIRecommendations;
+  /** GraphQL schemas (optional) */
+  graphqlSchemas?: Map<string, ApiSchema>;
 }
