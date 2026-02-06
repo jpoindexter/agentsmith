@@ -40,6 +40,7 @@ AGENTS.md
 AGENTS.xml
 AGENTS.index.json
 AGENTS-*.md
+!examples/**
 
 # Blog content (private, not for publication)
 blog/
