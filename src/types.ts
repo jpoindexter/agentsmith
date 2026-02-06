@@ -470,6 +470,12 @@ export interface SecurityAudit {
 }
 
 // ============================================================================
+// AI Configuration & Complexity
+// ============================================================================
+
+export type { AIRecommendations, AreaComplexity, FileComplexity, ComplexityLevel } from "./scanners/complexity.js";
+
+// ============================================================================
 // Main Result Type
 // ============================================================================
 
@@ -517,4 +523,6 @@ export interface ScanResult {
   testCoverage?: TestCoverage;
   /** Security audit (optional) */
   securityAudit?: SecurityAudit;
+  /** AI configuration recommendations (optional) */
+  aiRecommendations?: AIRecommendations;
 }

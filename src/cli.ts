@@ -32,6 +32,7 @@ import { scanEnvVars } from "./scanners/env-vars.js";
 import { scanPatterns } from "./scanners/patterns.js";
 import { scanDatabase } from "./scanners/database.js";
 import { scanStats, formatBytes } from "./scanners/stats.js";
+import { analyzeComplexity } from "./scanners/complexity.js";
 import { scanBarrels } from "./scanners/barrels.js";
 import { scanDependencies } from "./scanners/dependencies.js";
 import { scanGitLog, formatGitLog, getGitDiff, formatGitDiff } from "./scanners/git.js";
@@ -231,6 +232,9 @@ cli
       // Scan security (optional, only when --security flag)
       const securityAudit = options.security ? await scanSecurity(targetDir) : null;
 
+      // Analyze complexity and generate AI recommendations
+      const aiRecommendations = await analyzeComplexity(targetDir);
+
       // Report findings
       console.log(pc.green(`  ✓ Found ${components.length} components`));
       if (variants.length > 0) {
@@ -318,7 +322,7 @@ cli
 
       // Generate AGENTS.md content
       let content = generateAgentsMd(
-        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage, securityAudit: securityAudit || undefined },
+        { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, testCoverage, securityAudit: securityAudit || undefined, aiRecommendations },
         { compact: options.compact, compress: options.compress, minimal: options.minimal, includeTree: options.tree, xml: options.xml }
       );
 

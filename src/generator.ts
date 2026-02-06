@@ -40,7 +40,7 @@ export interface GeneratorOptions {
  * writeFileSync('AGENTS.md', content);
  */
 export function generateAgentsMd(result: ScanResult, options: GeneratorOptions = {}): string {
-  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns } = result;
+  const { components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports, antiPatterns, aiRecommendations } = result;
   const { compact = false, compress = false, minimal = false, includeTree = false, xml = false } = options;
 
   // Minimal mode: ultra-compact output (~1K tokens)
@@ -641,6 +641,49 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
         lines.push(`- Right: \`${pattern.right.split('\n')[0]}\``);
         lines.push("");
       }
+    }
+  }
+
+  // AI Configuration Section
+  if (aiRecommendations && !minimal && !compress) {
+    lines.push("## AI Assistant Configuration");
+    lines.push("");
+    lines.push("**Recommended Settings Based on Codebase Complexity:**");
+    lines.push("");
+
+    // Overall recommendations
+    lines.push(`- **For simple tasks** (formatting, typing): Use ${aiRecommendations.simpleModel === "haiku" ? "Haiku" : "Sonnet"} with minimal thinking`);
+    lines.push(`- **For complex tasks** (refactoring, architecture): Use ${aiRecommendations.complexModel === "opus" ? "Opus" : "Sonnet"}${aiRecommendations.extendedThinkingRecommended ? " with extended thinking" : ""}`);
+    lines.push("");
+
+    // Area-specific recommendations
+    if (aiRecommendations.areas.length > 0) {
+      lines.push("**Complexity by Area:**");
+      lines.push("");
+      for (const area of aiRecommendations.areas.slice(0, 5)) {
+        const icon = area.level === "high" ? "🔴" : area.level === "medium" ? "🟡" : "🟢";
+        const model = area.level === "high" ? "Sonnet/Opus" : area.level === "medium" ? "Sonnet" : "Haiku";
+        lines.push(`- ${icon} **${area.name}** (${area.fileCount} files, complexity: ${area.avgScore}/100)`);
+        lines.push(`  - Recommended: ${model}`);
+        if (area.characteristics.length > 0) {
+          lines.push(`  - Characteristics: ${area.characteristics.join(", ")}`);
+        }
+      }
+      lines.push("");
+    }
+
+    // High complexity files warning
+    if (aiRecommendations.complexFiles.length > 0 && !compact) {
+      const topComplex = aiRecommendations.complexFiles.slice(0, 3);
+      lines.push("**High Complexity Files** (use Sonnet with extended thinking):");
+      lines.push("");
+      for (const file of topComplex) {
+        lines.push(`- \`${file.path}\` (${file.lines} lines, score: ${file.score}/100)`);
+        if (file.reasons.length > 0) {
+          lines.push(`  - ${file.reasons.join(", ")}`);
+        }
+      }
+      lines.push("");
     }
   }
 
