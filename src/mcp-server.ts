@@ -412,17 +412,10 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
 
-  // Resources require a directory parameter via arguments
-  const directory = request.params.arguments?.directory as string;
-  if (!directory) {
-    return {
-      contents: [{
-        uri,
-        mimeType: "text/plain",
-        text: "Error: 'directory' argument required. Example: { directory: '/path/to/project' }",
-      }],
-    };
-  }
+  // Extract directory from URI query parameter or use current directory
+  // URI format: agents://agents-md?directory=/path/to/project
+  const url = new URL(uri.replace('agents://', 'http://localhost/'));
+  const directory = url.searchParams.get('directory') || process.cwd();
 
   const dir = resolve(directory);
   if (!existsSync(dir)) {
@@ -811,7 +804,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const output = database.models.map(m => {
-          const fields = m.fields.slice(0, 5).map(f => f.name).join(", ");
+          const fields = m.fields.slice(0, 5).join(", ");
           const more = m.fields.length > 5 ? `, +${m.fields.length - 5} more` : "";
           const rels = m.relations?.length ? ` | ${m.relations.length} relations` : "";
           return `- **${m.name}** — ${fields}${more}${rels}`;
@@ -820,7 +813,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: "text",
-            text: `Found ${database.models.length} models (${database.type}):\n\n${output.join("\n")}`,
+            text: `Found ${database.models.length} models (${database.provider}):\n\n${output.join("\n")}`,
           }],
         };
       }
@@ -949,7 +942,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const output = matches.map(m => {
-          const fields = m.fields.slice(0, 3).map(f => f.name).join(", ");
+          const fields = m.fields.slice(0, 3).join(", ");
           return `- **${m.name}** — ${fields}, ...`;
         });
 
@@ -1068,23 +1061,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "",
         ];
 
+        // Fields are just strings in the simplified model
         for (const field of model.fields) {
-          const attrs = [];
-          if (field.isPrimaryKey) attrs.push("PK");
-          if (field.isUnique) attrs.push("unique");
-          if (field.isRequired === false) attrs.push("optional");
-          if (field.defaultValue) attrs.push(`default: ${field.defaultValue}`);
-
-          const attrStr = attrs.length > 0 ? ` (${attrs.join(", ")})` : "";
-          info.push(`- **${field.name}**: ${field.type}${attrStr}`);
+          info.push(`- ${field}`);
         }
 
         if (model.relations && model.relations.length > 0) {
           info.push("");
           info.push("## Relations");
           info.push("");
+          // Relations are just strings in the simplified model
           for (const rel of model.relations) {
-            info.push(`- **${rel.name}** → ${rel.model} (${rel.type})`);
+            info.push(`- ${rel}`);
           }
         }
 
