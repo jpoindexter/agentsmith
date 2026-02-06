@@ -197,9 +197,12 @@ cli
     console.log(pc.dim(`  Scanning ${isRemote ? options.remote : targetDir}...\n`));
 
     try {
-      // Run all scanners in parallel
+      // Run types scanner first to enable schema resolution in API routes
       const excludePatterns = config.exclude || [];
-      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph, typeExports] = await Promise.all([
+      const typeExports = await scanTypes(targetDir);
+
+      // Run remaining scanners in parallel
+      const [components, tokens, framework, hooks, utilities, commands, existingContext, variants, apiRoutes, envVars, patterns, database, stats, barrels, dependencies, fileTree, importGraph] = await Promise.all([
         scanComponents(targetDir, excludePatterns),
         scanTokens(targetDir),
         detectFramework(targetDir),
@@ -208,7 +211,7 @@ cli
         scanCommands(targetDir),
         scanExistingContext(targetDir),
         scanVariants(targetDir),
-        scanApiRoutes(targetDir),
+        scanApiRoutes(targetDir, typeExports.types),
         scanEnvVars(targetDir),
         scanPatterns(targetDir),
         scanDatabase(targetDir),
@@ -217,7 +220,6 @@ cli
         scanDependencies(targetDir),
         scanFileTree(targetDir),
         scanImports(targetDir),
-        scanTypes(targetDir),
       ]);
 
       // Generate anti-patterns based on detected features

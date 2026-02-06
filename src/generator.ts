@@ -12,7 +12,7 @@
  * @module generator
  */
 
-import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, EnvVar, DetectedPatterns, DatabaseSchema, FileStats, BarrelExport, ComponentDependency, FileTree, ImportGraph, TypeScanResult, AntiPatternsResult } from "./types.js";
+import type { ScanResult, Component, Framework, Tokens, Hook, Utilities, Commands, ExistingContext, ComponentVariant, ApiRoute, ApiSchema, EnvVar, DetectedPatterns, DatabaseSchema, FileStats, BarrelExport, ComponentDependency, FileTree, ImportGraph, TypeScanResult, AntiPatternsResult } from "./types.js";
 import { extractRulesFromClaudeMd } from "./scanners/existing-context.js";
 import { formatFileTree } from "./scanners/file-tree.js";
 import { formatImportGraph } from "./scanners/imports.js";
@@ -428,7 +428,17 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
   if (apiRoutes.length > 0) {
     lines.push("## API Routes");
     lines.push("");
-    lines.push(`${apiRoutes.length} API endpoints:`);
+
+    // Count routes with schemas
+    const routesWithSchemas = apiRoutes.filter(r =>
+      r.requestSchema || r.responseSchema || r.querySchema
+    ).length;
+
+    if (routesWithSchemas > 0) {
+      lines.push(`${apiRoutes.length} API endpoints (${routesWithSchemas} with schemas):`);
+    } else {
+      lines.push(`${apiRoutes.length} API endpoints:`);
+    }
     lines.push("");
 
     // Group routes by base path
@@ -442,6 +452,19 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
         const methods = route.methods.join(", ");
         const auth = route.isProtected ? " 🔒" : "";
         lines.push(`- \`${methods}\` \`${route.path}\`${auth}`);
+
+        // Add schema information (skip in compress/minimal modes)
+        if (!compress && !minimal) {
+          if (route.requestSchema && route.requestSchema.fields.length > 0) {
+            lines.push(`  - **Request**: ${formatSchema(route.requestSchema, compact)}`);
+          }
+          if (route.querySchema && route.querySchema.fields.length > 0) {
+            lines.push(`  - **Query**: ${formatSchema(route.querySchema, compact)}`);
+          }
+          if (route.responseSchema && route.responseSchema.fields.length > 0) {
+            lines.push(`  - **Response**: ${formatSchema(route.responseSchema, compact)}`);
+          }
+        }
       }
       lines.push("");
     }
@@ -774,6 +797,32 @@ function groupRoutesByBasePath(routes: ApiRoute[]): Record<string, ApiRoute[]> {
   }
 
   return grouped;
+}
+
+/**
+ * Formats an API schema for display
+ * Compact mode shows fewer fields, normal shows up to 5
+ */
+function formatSchema(schema: ApiSchema, compact: boolean = false): string {
+  const maxFields = compact ? 3 : 5;
+  const typeName = schema.name ? `${schema.name} ` : '';
+
+  const fields = schema.fields.slice(0, maxFields).map(f => {
+    const optional = f.isOptional ? '?' : '';
+    const validations = f.validations && f.validations.length > 0
+      ? ` (${f.validations.join(', ')})`
+      : '';
+
+    // Show nested indicator
+    const nested = f.nested && f.nested.length > 0 ? ' {...}' : '';
+
+    return `${f.name}${optional}: ${f.type}${validations}${nested}`;
+  });
+
+  const remaining = schema.fields.length - maxFields;
+  const more = remaining > 0 ? `, +${remaining} more` : '';
+
+  return `${typeName}{ ${fields.join(', ')}${more} }`;
 }
 
 /**

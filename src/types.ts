@@ -205,6 +205,38 @@ export interface ApiRoute {
   isProtected: boolean;
   /** Route description if available */
   description?: string;
+  /** Request body schema */
+  requestSchema?: ApiSchema;
+  /** Response schema */
+  responseSchema?: ApiSchema;
+  /** Query parameters schema */
+  querySchema?: ApiSchema;
+}
+
+/** API schema information */
+export interface ApiSchema {
+  /** Schema source (zod, typescript, or unknown) */
+  source: "zod" | "typescript" | "unknown";
+  /** Type/schema name if defined */
+  name?: string;
+  /** Extracted fields with types */
+  fields: ApiField[];
+  /** Whether schema is required */
+  isRequired?: boolean;
+}
+
+/** API field information */
+export interface ApiField {
+  /** Field name */
+  name: string;
+  /** Field type (string, number, boolean, object, etc.) */
+  type: string;
+  /** Whether field is optional */
+  isOptional: boolean;
+  /** Validation rules (min, max, email, etc.) */
+  validations?: string[];
+  /** Nested fields for objects */
+  nested?: ApiField[];
 }
 
 /** Database model definition */
