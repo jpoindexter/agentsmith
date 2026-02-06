@@ -38,7 +38,7 @@ npx @jpoindexter/agent-smith
   ✓ Found 5 components with CVA variants
   ✓ Found 37 color tokens
   ✓ Found 14 custom hooks
-  ✓ Found 46 API routes
+  ✓ Found 46 API routes (8 with schemas)
   ✓ Found 87 environment variables
   ✓ Detected Next.js (App Router)
   ✓ Detected shadcn/ui (26 Radix packages)
@@ -108,6 +108,42 @@ agentsmith --xml
 # Include file tree visualization
 agentsmith --tree
 ```
+
+## What's New in v1.1.0
+
+### 🎯 API Schema Extraction
+Now detects **Zod validation schemas** and **TypeScript types** from your API routes:
+
+```markdown
+- `POST` `/api/contact`
+  - **Request**: contactSchema {
+      name: string (max: 100, min: 1, "Name is required")
+      email: string (email: Invalid email address)
+      subject: "sales" | "support" | "billing" | ...
+    }
+```
+
+AI agents can now see your API contracts instead of guessing field names!
+
+### 🧠 Cognitive Complexity Analysis
+Analyzes your codebase complexity and recommends AI model effort levels:
+
+```markdown
+**Complexity by Area:**
+- 🔴 Database: Maximum effort (most capable model)
+- 🟡 API Routes: Standard effort (balanced model)
+- 🟢 Utilities: Minimal effort (fast, low-cost model)
+```
+
+### 🚀 Performance Improvements
+- **Global schema caching**: O(n²) → O(n) for shared schemas
+- **20-40% faster** on large codebases
+
+### 🌐 GraphQL Support
+Extracts GraphQL schema definitions from `.graphql` and `.gql` files.
+
+### 🤖 Provider-Agnostic AI Recommendations
+Works with **any AI provider** (Claude, GPT, Gemini) - no hardcoded model names.
 
 ## New in v1.0.0
 
@@ -195,11 +231,14 @@ Create `agentsmith.config.json` in your project root:
 | **Tokens** | CSS variables and Tailwind config |
 | **Hooks** | Custom hooks with client-only detection |
 | **API Routes** | Next.js routes with methods and auth status |
+| **API Schemas** | Zod validation schemas and TypeScript types for request/response |
+| **GraphQL** | GraphQL schema definitions from .graphql/.gql files |
 | **Database** | Prisma and Drizzle models with fields and relations |
 | **Environment** | Required/optional env vars from .env.example |
 | **Patterns** | react-hook-form, Zod, Zustand, tRPC, testing libs |
 | **Utilities** | cn(), mode/design-system detection |
 | **Framework** | Next.js, Remix, Vite with version and router type |
+| **Complexity** | Cognitive complexity analysis for AI model recommendations |
 | **Statistics** | Total files, lines, size, largest files |
 | **Existing docs** | CLAUDE.md, .ai/ folder, .cursorrules |
 | **File Tree** | Project structure visualization |
@@ -221,11 +260,13 @@ The generated AGENTS.md includes:
 - **Unused Components** - Potentially dead code warnings
 - **Preferred Imports** - Barrel imports for cleaner code
 - **Custom Hooks** - With client-only markers
-- **API Routes** - Grouped by path with methods and auth
+- **API Routes** - Grouped by path with methods, auth, and request/response schemas
+- **GraphQL Schemas** - Type definitions from .graphql/.gql files
 - **Database Models** - Fields and relations
 - **Environment Variables** - Required vs optional
 - **Code Patterns** - Detected patterns with examples
 - **Design Tokens** - Color tokens with usage guidance
+- **AI Recommendations** - Model effort levels based on codebase complexity
 - **Commands** - npm scripts
 - **Security** - Vulnerabilities and outdated packages (with --security)
 
