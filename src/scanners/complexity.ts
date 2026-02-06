@@ -127,17 +127,21 @@ function analyzeFile(fullPath: string, relativePath: string, dir: string): FileC
       score += 6;
     }
 
-    // 2. CYCLOMATIC COMPLEXITY (max 25 points)
-    const cyclomaticComplexity = calculateCyclomaticComplexity(content);
-    if (cyclomaticComplexity > 50) {
-      score += 25;
-      reasons.push("high cyclomatic complexity");
-    } else if (cyclomaticComplexity > 30) {
-      score += 18;
-      reasons.push("moderate cyclomatic complexity");
-    } else if (cyclomaticComplexity > 15) {
+    // 2. COGNITIVE COMPLEXITY (max 30 points) - Primary metric
+    // Research shows cognitive > cyclomatic for measuring mental effort
+    const cognitiveComplexity = calculateCognitiveComplexity(content);
+    if (cognitiveComplexity > 50) {
+      score += 30;
+      reasons.push("high cognitive complexity");
+    } else if (cognitiveComplexity > 25) {
+      score += 20;
+      reasons.push("moderate cognitive complexity");
+    } else if (cognitiveComplexity > 10) {
       score += 10;
     }
+
+    // Keep cyclomatic as secondary metric (no longer adds to score, just for reference)
+    const cyclomaticComplexity = calculateCyclomaticComplexity(content);
 
     // 3. GIT CHURN (max 15 points) - frequently changed files need more attention
     const churn = calculateGitChurn(relativePath, dir);
@@ -227,6 +231,78 @@ function calculateCyclomaticComplexity(content: string): number {
 
   complexity += ifCount + elseCount + forCount + whileCount + caseCount + catchCount;
   complexity += andOrCount + ternaryCount;
+
+  return complexity;
+}
+
+/**
+ * Calculates cognitive complexity (mental effort to understand code)
+ * Based on Sonar's Cognitive Complexity algorithm
+ * Measures: nesting depth, interruptions, recursion
+ *
+ * Research: https://www.sonarsource.com/resources/white-papers/cognitive-complexity/
+ */
+function calculateCognitiveComplexity(content: string): number {
+  let complexity = 0;
+  let nestingLevel = 0;
+  const lines = content.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip comments and empty lines
+    if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.length === 0) {
+      continue;
+    }
+
+    // Detect nesting increases
+    const openBraces = (line.match(/\{/g) || []).length;
+    const closeBraces = (line.match(/\}/g) || []).length;
+
+    // Count control structures with nesting penalty
+    if (/\bif\s*\(/.test(line)) {
+      complexity += 1 + nestingLevel; // +1 for if, +nestingLevel for being nested
+    }
+    if (/\belse\b/.test(line)) {
+      complexity += 1;
+    }
+    if (/\bfor\s*\(/.test(line) || /\bwhile\s*\(/.test(line) || /\bdo\s*\{/.test(line)) {
+      complexity += 1 + nestingLevel;
+    }
+    if (/\bcase\s+/.test(line)) {
+      complexity += 1 + nestingLevel;
+    }
+    if (/\bcatch\s*\(/.test(line)) {
+      complexity += 1 + nestingLevel;
+    }
+
+    // Logical operators in conditions (break readability)
+    if (/\bif\s*\([^)]*(\&\&|\|\|)/.test(line)) {
+      const operators = (line.match(/(\&\&|\|\|)/g) || []).length;
+      complexity += operators;
+    }
+
+    // Interruptions (break, continue, return in middle of function)
+    if (nestingLevel > 0 && /\b(break|continue)\b/.test(trimmed)) {
+      complexity += 1;
+    }
+
+    // Recursion (function calling itself)
+    const funcMatch = line.match(/function\s+(\w+)\s*\(/);
+    if (funcMatch) {
+      const funcName = funcMatch[1];
+      // Check if this function is called in its own body (simple recursion detection)
+      const funcBody = lines.slice(i).join('\n').split(/^function\s+\w+\s*\(/m)[0];
+      if (funcBody && funcBody.includes(`${funcName}(`)) {
+        complexity += 2; // Recursion is harder to understand
+      }
+    }
+
+    // Update nesting level
+    nestingLevel += openBraces - closeBraces;
+    if (nestingLevel < 0) nestingLevel = 0; // Safety check
+  }
 
   return complexity;
 }
