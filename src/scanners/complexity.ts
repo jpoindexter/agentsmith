@@ -42,12 +42,15 @@ export interface AreaComplexity {
   characteristics: string[];
 }
 
+/** AI effort/resource tier for provider-agnostic recommendations */
+export type ModelTier = "minimal" | "standard" | "maximum";
+
 /** AI configuration recommendations */
 export interface AIRecommendations {
-  /** Recommended model for simple tasks */
-  simpleModel: "haiku" | "sonnet";
-  /** Recommended model for complex tasks */
-  complexModel: "sonnet" | "opus";
+  /** Recommended model tier for simple tasks */
+  simpleModel: ModelTier;
+  /** Recommended model tier for complex tasks */
+  complexModel: ModelTier;
   /** Whether to enable extended thinking */
   extendedThinkingRecommended: boolean;
   /** Areas categorized by complexity */
@@ -97,8 +100,8 @@ export async function analyzeComplexity(dir: string): Promise<AIRecommendations>
   const extendedThinkingRecommended = avgComplexity > 35 || complexFiles[0]?.score > 55;
 
   return {
-    simpleModel: avgComplexity > 25 ? "sonnet" : "haiku",
-    complexModel: avgComplexity > 45 ? "opus" : "sonnet",
+    simpleModel: avgComplexity > 25 ? "standard" : "minimal",
+    complexModel: avgComplexity > 45 ? "maximum" : "standard",
     extendedThinkingRecommended,
     areas,
     complexFiles,

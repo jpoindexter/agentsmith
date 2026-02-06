@@ -753,8 +753,15 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
     lines.push("");
 
     // Overall recommendations
-    lines.push(`- **For simple tasks** (formatting, typing): Use ${aiRecommendations.simpleModel === "haiku" ? "Haiku" : "Sonnet"} with minimal thinking`);
-    lines.push(`- **For complex tasks** (refactoring, architecture): Use ${aiRecommendations.complexModel === "opus" ? "Opus" : "Sonnet"}${aiRecommendations.extendedThinkingRecommended ? " with extended thinking" : ""}`);
+    const simpleModelDesc = aiRecommendations.simpleModel === "minimal"
+      ? "minimal effort (fast, low-cost models)"
+      : "standard effort (balanced cost/capability)";
+    const complexModelDesc = aiRecommendations.complexModel === "maximum"
+      ? "maximum effort (most capable models, extended thinking)"
+      : "standard effort (balanced cost/capability)";
+
+    lines.push(`- **For simple tasks** (formatting, typing): ${simpleModelDesc}`);
+    lines.push(`- **For complex tasks** (refactoring, architecture): ${complexModelDesc}`);
     lines.push("");
 
     // Area-specific recommendations
@@ -763,9 +770,13 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
       lines.push("");
       for (const area of aiRecommendations.areas.slice(0, 5)) {
         const icon = area.level === "high" ? "🔴" : area.level === "medium" ? "🟡" : "🟢";
-        const model = area.level === "high" ? "Sonnet/Opus" : area.level === "medium" ? "Sonnet" : "Haiku";
+        const effort = area.level === "high"
+          ? "Maximum effort (most capable model)"
+          : area.level === "medium"
+          ? "Standard effort (balanced model)"
+          : "Minimal effort (fast, low-cost model)";
         lines.push(`- ${icon} **${area.name}** (${area.fileCount} files, complexity: ${area.avgScore}/100)`);
-        lines.push(`  - Recommended: ${model}`);
+        lines.push(`  - Recommended: ${effort}`);
         if (area.characteristics.length > 0) {
           lines.push(`  - Characteristics: ${area.characteristics.join(", ")}`);
         }
@@ -776,7 +787,7 @@ export function generateAgentsMd(result: ScanResult, options: GeneratorOptions =
     // High complexity files warning
     if (aiRecommendations.complexFiles.length > 0 && !compact) {
       const topComplex = aiRecommendations.complexFiles.slice(0, 3);
-      lines.push("**High Complexity Files** (use Sonnet with extended thinking):");
+      lines.push("**High Complexity Files** (use most capable model with extended thinking):");
       lines.push("");
       for (const file of topComplex) {
         lines.push(`- \`${file.path}\` (${file.lines} lines, score: ${file.score}/100)`);
