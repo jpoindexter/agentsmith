@@ -54,6 +54,13 @@ import { loadConfig } from "./config.js";
 import { writeFileSync, existsSync, rmSync, watch } from "fs";
 import { join, relative } from "path";
 import { execSync } from "child_process";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
 
 const cli = cac("agentsmith");
 
@@ -528,5 +535,5 @@ cli
   });
 
 cli.help();
-cli.version("1.0.0");
+cli.version(packageJson.version);
 cli.parse();
