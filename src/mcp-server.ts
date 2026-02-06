@@ -45,13 +45,16 @@ import { scanImports } from "./scanners/imports.js";
 import { scanTypes } from "./scanners/types.js";
 import { generateAntiPatterns } from "./scanners/anti-patterns.js";
 import { scanTestCoverage } from "./scanners/tests.js";
+import { scanGraphQL } from "./scanners/graphql.js";
+import { analyzeComplexity } from "./scanners/complexity.js";
+import { extractZodSchemasFromAST } from "./scanners/ast-schema-parser.js";
 import { generateAgentsMd } from "./generator.js";
 import { estimateTokens, formatTokens } from "./utils/tokens.js";
 
 const server = new Server(
   {
     name: "agentsmith",
-    version: "1.0.0",
+    version: "1.1.0",
   },
   {
     capabilities: {
@@ -137,6 +140,202 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["directory", "componentName"],
+        },
+      },
+      // Granular scanners
+      {
+        name: "scan_api_routes",
+        description: "Scan API routes with request/response schemas (Zod, TypeScript, tRPC)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to scan",
+            },
+          },
+          required: ["directory"],
+        },
+      },
+      {
+        name: "scan_database",
+        description: "Scan database models (Prisma, Drizzle) with fields and relations",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to scan",
+            },
+          },
+          required: ["directory"],
+        },
+      },
+      {
+        name: "scan_graphql",
+        description: "Scan GraphQL schema definitions from .graphql and .gql files",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to scan",
+            },
+          },
+          required: ["directory"],
+        },
+      },
+      {
+        name: "analyze_complexity",
+        description: "Analyze codebase complexity and get AI model recommendations",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to analyze",
+            },
+          },
+          required: ["directory"],
+        },
+      },
+      {
+        name: "scan_hooks",
+        description: "Scan custom React hooks",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to scan",
+            },
+          },
+          required: ["directory"],
+        },
+      },
+      // Search tools
+      {
+        name: "search_api_routes",
+        description: "Search API routes by path or method",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to search",
+            },
+            query: {
+              type: "string",
+              description: "Search query (path or method like GET, POST)",
+            },
+          },
+          required: ["directory", "query"],
+        },
+      },
+      {
+        name: "search_database_models",
+        description: "Search database models by name",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to search",
+            },
+            query: {
+              type: "string",
+              description: "Model name to search for",
+            },
+          },
+          required: ["directory", "query"],
+        },
+      },
+      {
+        name: "search_hooks",
+        description: "Search custom hooks by name",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory to search",
+            },
+            query: {
+              type: "string",
+              description: "Hook name to search for",
+            },
+          },
+          required: ["directory", "query"],
+        },
+      },
+      // Detailed getters
+      {
+        name: "get_api_route_info",
+        description: "Get detailed API route information including schemas and validations",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory containing the route",
+            },
+            routePath: {
+              type: "string",
+              description: "The route path (e.g., /api/users)",
+            },
+          },
+          required: ["directory", "routePath"],
+        },
+      },
+      {
+        name: "get_database_model_info",
+        description: "Get detailed database model information with fields and relations",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory containing the schema",
+            },
+            modelName: {
+              type: "string",
+              description: "The model name",
+            },
+          },
+          required: ["directory", "modelName"],
+        },
+      },
+      {
+        name: "get_hook_info",
+        description: "Get detailed custom hook information",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory: {
+              type: "string",
+              description: "The directory containing the hook",
+            },
+            hookName: {
+              type: "string",
+              description: "The hook name (e.g., useAuth)",
+            },
+          },
+          required: ["directory", "hookName"],
+        },
+      },
+      // Schema extraction
+      {
+        name: "get_file_schemas",
+        description: "Extract Zod and TypeScript schemas from a specific file",
+        inputSchema: {
+          type: "object",
+          properties: {
+            filePath: {
+              type: "string",
+              description: "Absolute path to the file",
+            },
+          },
+          required: ["filePath"],
         },
       },
     ],
@@ -319,6 +518,396 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // Granular scanner handlers
+      case "scan_api_routes": {
+        const dir = resolve(args?.directory as string);
+        const routes = await scanApiRoutes(dir);
+
+        const output = routes.map(r => {
+          const methods = r.methods.join(", ");
+          const auth = r.isProtected ? "🔒" : "";
+          let line = `- \`${methods}\` \`${r.path}\` ${auth}`.trim();
+
+          if (r.requestSchema) {
+            line += `\n  Request: ${formatSchemaInline(r.requestSchema)}`;
+          }
+          if (r.responseSchema) {
+            line += `\n  Response: ${formatSchemaInline(r.responseSchema)}`;
+          }
+
+          return line;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${routes.length} API routes:\n\n${output.join("\n\n")}`,
+          }],
+        };
+      }
+
+      case "scan_database": {
+        const dir = resolve(args?.directory as string);
+        const database = await scanDatabase(dir);
+
+        if (!database) {
+          return {
+            content: [{ type: "text", text: "No database schema found" }],
+          };
+        }
+
+        const output = database.models.map(m => {
+          const fields = m.fields.slice(0, 5).map(f => f.name).join(", ");
+          const more = m.fields.length > 5 ? `, +${m.fields.length - 5} more` : "";
+          const rels = m.relations?.length ? ` | ${m.relations.length} relations` : "";
+          return `- **${m.name}** — ${fields}${more}${rels}`;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${database.models.length} models (${database.type}):\n\n${output.join("\n")}`,
+          }],
+        };
+      }
+
+      case "scan_graphql": {
+        const dir = resolve(args?.directory as string);
+        const schemas = await scanGraphQL(dir);
+
+        if (schemas.size === 0) {
+          return {
+            content: [{ type: "text", text: "No GraphQL schemas found" }],
+          };
+        }
+
+        const output = Array.from(schemas.entries()).map(([name, schema]) => {
+          const fields = schema.fields.slice(0, 5).map(f => `${f.name}: ${f.type}`).join(", ");
+          const more = schema.fields.length > 5 ? `, +${schema.fields.length - 5} more` : "";
+          return `- **${name}** — ${fields}${more}`;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${schemas.size} GraphQL types:\n\n${output.join("\n")}`,
+          }],
+        };
+      }
+
+      case "analyze_complexity": {
+        const dir = resolve(args?.directory as string);
+        const analysis = await analyzeComplexity(dir);
+
+        const areas = analysis.areas.slice(0, 5).map(a => {
+          const icon = a.level === "high" ? "🔴" : a.level === "medium" ? "🟡" : "🟢";
+          return `${icon} **${a.name}**: ${a.avgScore}/100 (${a.fileCount} files)`;
+        });
+
+        const files = analysis.complexFiles.slice(0, 3).map(f => {
+          return `- \`${f.path}\` (${f.score}/100) — ${f.reasons.slice(0, 2).join(", ")}`;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `# Complexity Analysis\n\n` +
+              `**Recommended:**\n- Simple tasks: ${analysis.simpleModel} effort\n- Complex tasks: ${analysis.complexModel} effort\n` +
+              `${analysis.extendedThinkingRecommended ? "- Extended thinking recommended\n" : ""}\n` +
+              `**By Area:**\n${areas.join("\n")}\n\n` +
+              `**Most Complex Files:**\n${files.join("\n")}`,
+          }],
+        };
+      }
+
+      case "scan_hooks": {
+        const dir = resolve(args?.directory as string);
+        const hooks = await scanHooks(dir);
+
+        const output = hooks.map(h => {
+          const client = h.isClientOnly ? " (client)" : "";
+          return `- \`${h.name}\`${client} — \`${h.path}\``;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${hooks.length} custom hooks:\n\n${output.join("\n")}`,
+          }],
+        };
+      }
+
+      // Search handlers
+      case "search_api_routes": {
+        const dir = resolve(args?.directory as string);
+        const query = (args?.query as string || "").toLowerCase();
+        const routes = await scanApiRoutes(dir);
+
+        const matches = routes.filter(r =>
+          r.path.toLowerCase().includes(query) ||
+          r.methods.some(m => m.toLowerCase() === query)
+        );
+
+        if (matches.length === 0) {
+          return {
+            content: [{ type: "text", text: `No routes found matching "${query}"` }],
+          };
+        }
+
+        const output = matches.map(r => {
+          const methods = r.methods.join(", ");
+          const auth = r.isProtected ? "🔒" : "";
+          return `- \`${methods}\` \`${r.path}\` ${auth}`.trim();
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${matches.length} route(s) matching "${query}":\n\n${output.join("\n")}`,
+          }],
+        };
+      }
+
+      case "search_database_models": {
+        const dir = resolve(args?.directory as string);
+        const query = (args?.query as string || "").toLowerCase();
+        const database = await scanDatabase(dir);
+
+        if (!database) {
+          return {
+            content: [{ type: "text", text: "No database schema found" }],
+          };
+        }
+
+        const matches = database.models.filter(m =>
+          m.name.toLowerCase().includes(query)
+        );
+
+        if (matches.length === 0) {
+          return {
+            content: [{ type: "text", text: `No models found matching "${query}"` }],
+          };
+        }
+
+        const output = matches.map(m => {
+          const fields = m.fields.slice(0, 3).map(f => f.name).join(", ");
+          return `- **${m.name}** — ${fields}, ...`;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${matches.length} model(s) matching "${query}":\n\n${output.join("\n")}`,
+          }],
+        };
+      }
+
+      case "search_hooks": {
+        const dir = resolve(args?.directory as string);
+        const query = (args?.query as string || "").toLowerCase();
+        const hooks = await scanHooks(dir);
+
+        const matches = hooks.filter(h =>
+          h.name.toLowerCase().includes(query)
+        );
+
+        if (matches.length === 0) {
+          return {
+            content: [{ type: "text", text: `No hooks found matching "${query}"` }],
+          };
+        }
+
+        const output = matches.map(h => {
+          return `- \`${h.name}\` — \`${h.path}\``;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${matches.length} hook(s) matching "${query}":\n\n${output.join("\n")}`,
+          }],
+        };
+      }
+
+      // Detailed getter handlers
+      case "get_api_route_info": {
+        const dir = resolve(args?.directory as string);
+        const routePath = args?.routePath as string;
+        const routes = await scanApiRoutes(dir);
+
+        const route = routes.find(r => r.path === routePath);
+
+        if (!route) {
+          return {
+            content: [{ type: "text", text: `Route "${routePath}" not found` }],
+            isError: true,
+          };
+        }
+
+        const info = [
+          `# ${route.path}`,
+          "",
+          `**Methods:** ${route.methods.join(", ")}`,
+          `**Protected:** ${route.isProtected ? "Yes 🔒" : "No"}`,
+        ];
+
+        if (route.description) {
+          info.push(`**Description:** ${route.description}`);
+        }
+
+        if (route.requestSchema) {
+          info.push("");
+          info.push("## Request Schema");
+          info.push("");
+          info.push(formatSchemaDetailed(route.requestSchema));
+        }
+
+        if (route.responseSchema) {
+          info.push("");
+          info.push("## Response Schema");
+          info.push("");
+          info.push(formatSchemaDetailed(route.responseSchema));
+        }
+
+        if (route.querySchema) {
+          info.push("");
+          info.push("## Query Parameters");
+          info.push("");
+          info.push(formatSchemaDetailed(route.querySchema));
+        }
+
+        return {
+          content: [{ type: "text", text: info.join("\n") }],
+        };
+      }
+
+      case "get_database_model_info": {
+        const dir = resolve(args?.directory as string);
+        const modelName = args?.modelName as string;
+        const database = await scanDatabase(dir);
+
+        if (!database) {
+          return {
+            content: [{ type: "text", text: "No database schema found" }],
+            isError: true,
+          };
+        }
+
+        const model = database.models.find(m => m.name === modelName);
+
+        if (!model) {
+          return {
+            content: [{ type: "text", text: `Model "${modelName}" not found` }],
+            isError: true,
+          };
+        }
+
+        const info = [
+          `# ${model.name}`,
+          "",
+          "## Fields",
+          "",
+        ];
+
+        for (const field of model.fields) {
+          const attrs = [];
+          if (field.isPrimaryKey) attrs.push("PK");
+          if (field.isUnique) attrs.push("unique");
+          if (field.isRequired === false) attrs.push("optional");
+          if (field.defaultValue) attrs.push(`default: ${field.defaultValue}`);
+
+          const attrStr = attrs.length > 0 ? ` (${attrs.join(", ")})` : "";
+          info.push(`- **${field.name}**: ${field.type}${attrStr}`);
+        }
+
+        if (model.relations && model.relations.length > 0) {
+          info.push("");
+          info.push("## Relations");
+          info.push("");
+          for (const rel of model.relations) {
+            info.push(`- **${rel.name}** → ${rel.model} (${rel.type})`);
+          }
+        }
+
+        return {
+          content: [{ type: "text", text: info.join("\n") }],
+        };
+      }
+
+      case "get_hook_info": {
+        const dir = resolve(args?.directory as string);
+        const hookName = args?.hookName as string;
+        const hooks = await scanHooks(dir);
+
+        const hook = hooks.find(h => h.name === hookName);
+
+        if (!hook) {
+          return {
+            content: [{ type: "text", text: `Hook "${hookName}" not found` }],
+            isError: true,
+          };
+        }
+
+        // Read the hook file content
+        const filePath = join(dir, hook.path);
+        let fileContent = "";
+        if (existsSync(filePath)) {
+          fileContent = readFileSync(filePath, "utf-8");
+        }
+
+        const info = [
+          `# ${hook.name}`,
+          "",
+          `**Path:** \`${hook.path}\``,
+          `**Client Only:** ${hook.isClientOnly ? "Yes" : "No"}`,
+        ];
+
+        if (fileContent) {
+          info.push("");
+          info.push("## Source Code");
+          info.push("");
+          info.push("```typescript");
+          info.push(fileContent);
+          info.push("```");
+        }
+
+        return {
+          content: [{ type: "text", text: info.join("\n") }],
+        };
+      }
+
+      // Schema extraction handler
+      case "get_file_schemas": {
+        const filePath = args?.filePath as string;
+
+        if (!existsSync(filePath)) {
+          return {
+            content: [{ type: "text", text: `File not found: ${filePath}` }],
+            isError: true,
+          };
+        }
+
+        const content = readFileSync(filePath, "utf-8");
+        const schemas = extractZodSchemasFromAST(content, filePath, filePath);
+
+        if (schemas.size === 0) {
+          return {
+            content: [{ type: "text", text: "No schemas found in file" }],
+          };
+        }
+
+        const output = Array.from(schemas.entries()).map(([name, schema]) => {
+          return `## ${name}\n\nSource: ${schema.source}\n\n${formatSchemaDetailed(schema)}`;
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Found ${schemas.size} schema(s):\n\n${output.join("\n\n---\n\n")}`,
+          }],
+        };
+      }
+
       default:
         return {
           content: [{ type: "text", text: `Unknown tool: ${name}` }],
@@ -337,6 +926,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 });
+
+// Helper functions for schema formatting
+import type { ApiSchema } from "./types.js";
+
+function formatSchemaInline(schema: ApiSchema): string {
+  const fields = schema.fields.slice(0, 3).map(f => {
+    const opt = f.isOptional ? "?" : "";
+    const val = f.validations && f.validations.length > 0 ? ` (${f.validations[0]})` : "";
+    return `${f.name}${opt}: ${f.type}${val}`;
+  });
+
+  const more = schema.fields.length > 3 ? `, +${schema.fields.length - 3} more` : "";
+  return `{ ${fields.join(", ")}${more} }`;
+}
+
+function formatSchemaDetailed(schema: ApiSchema): string {
+  const lines: string[] = [];
+
+  for (const field of schema.fields) {
+    const opt = field.isOptional ? "?" : "";
+    const val = field.validations && field.validations.length > 0
+      ? ` — ${field.validations.join(", ")}`
+      : "";
+
+    if (field.nested && field.nested.length > 0) {
+      lines.push(`- **${field.name}${opt}**: ${field.type} {`);
+      for (const nested of field.nested.slice(0, 5)) {
+        const nestedOpt = nested.isOptional ? "?" : "";
+        lines.push(`  - ${nested.name}${nestedOpt}: ${nested.type}`);
+      }
+      if (field.nested.length > 5) {
+        lines.push(`  - ... +${field.nested.length - 5} more fields`);
+      }
+      lines.push("}");
+    } else {
+      lines.push(`- **${field.name}${opt}**: ${field.type}${val}`);
+    }
+  }
+
+  return lines.join("\n");
+}
 
 export async function startMcpServer() {
   const transport = new StdioServerTransport();
