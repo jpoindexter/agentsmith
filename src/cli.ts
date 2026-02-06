@@ -56,11 +56,26 @@ import { join, relative } from "path";
 import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
-import { dirname } from "path";
+import { dirname, join as pathJoin } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
+
+// Try to read package.json from multiple possible locations
+let packageVersion = "1.1.2"; // fallback
+try {
+  // When running from dist in development or from installed package
+  const packageJson = JSON.parse(readFileSync(pathJoin(__dirname, "../package.json"), "utf-8"));
+  packageVersion = packageJson.version;
+} catch {
+  try {
+    // When dist is at root level in published package
+    const packageJson = JSON.parse(readFileSync(pathJoin(__dirname, "package.json"), "utf-8"));
+    packageVersion = packageJson.version;
+  } catch {
+    // Use fallback version
+  }
+}
 
 const cli = cac("agentsmith");
 
@@ -535,5 +550,5 @@ cli
   });
 
 cli.help();
-cli.version(packageJson.version);
+cli.version(packageVersion);
 cli.parse();
