@@ -10,15 +10,26 @@
 import { parse } from "@typescript-eslint/typescript-estree";
 import type { TSESTree } from "@typescript-eslint/typescript-estree";
 import { readFileSync, existsSync } from "fs";
-import { join, dirname } from "path";
+import { join, dirname, resolve } from "path";
 import type { ApiSchema, ApiField } from "../types.js";
 
 /**
+ * Represents an imported schema
+ */
+interface ImportedSchema {
+  name: string;
+  source: string; // Import path
+  isDefault: boolean;
+}
+
+/**
  * Extracts Zod schemas from TypeScript code using AST parsing
+ * Also detects and resolves imported schemas
  */
 export function extractZodSchemasFromAST(
   content: string,
-  filePath: string
+  filePath: string,
+  projectRoot?: string
 ): Map<string, ApiSchema> {
   const schemas = new Map<string, ApiSchema>();
 
@@ -30,7 +41,10 @@ export function extractZodSchemasFromAST(
       jsx: true,
     });
 
-    // Find all variable declarations that use Zod
+    // Step 1: Extract imports to find imported schemas
+    const imports = extractImports(ast);
+
+    // Step 2: Find all inline variable declarations that use Zod
     traverseAST(ast, (node) => {
       if (node.type === "VariableDeclarator" && node.init) {
         const name = getIdentifierName(node.id);
@@ -42,12 +56,62 @@ export function extractZodSchemasFromAST(
         }
       }
     });
+
+    // Step 3: Check for usage of imported schemas and resolve them
+    for (const imported of imports) {
+      // Check if this import is used with .parse() or .safeParse()
+      if (content.includes(`${imported.name}.parse(`) || content.includes(`${imported.name}.safeParse(`)) {
+        // Try to resolve the schema from the imported file
+        const resolvedSchema = resolveSchemaImport(
+          imported.name,
+          imported.source,
+          filePath,
+          projectRoot || dirname(filePath)
+        );
+        if (resolvedSchema && !schemas.has(imported.name)) {
+          schemas.set(imported.name, resolvedSchema);
+        }
+      }
+    }
   } catch (error) {
     // AST parsing failed, fall back to empty result
     return schemas;
   }
 
   return schemas;
+}
+
+/**
+ * Extracts import statements from AST
+ */
+function extractImports(ast: TSESTree.Program): ImportedSchema[] {
+  const imports: ImportedSchema[] = [];
+
+  traverseAST(ast, (node) => {
+    if (node.type === "ImportDeclaration" && node.source.type === "Literal") {
+      const source = node.source.value as string;
+
+      for (const specifier of node.specifiers) {
+        if (specifier.type === "ImportSpecifier" && specifier.imported.type === "Identifier") {
+          // Named import: import { Schema } from './file'
+          imports.push({
+            name: specifier.local.name,
+            source,
+            isDefault: false,
+          });
+        } else if (specifier.type === "ImportDefaultSpecifier") {
+          // Default import: import Schema from './file'
+          imports.push({
+            name: specifier.local.name,
+            source,
+            isDefault: true,
+          });
+        }
+      }
+    }
+  });
+
+  return imports;
 }
 
 /**
@@ -440,24 +504,55 @@ function traverseAST(node: TSESTree.Node, visitor: (node: TSESTree.Node) => void
  */
 export function resolveSchemaImport(
   schemaName: string,
+  importSource: string,
   currentFile: string,
   projectRoot: string
 ): ApiSchema | null {
   try {
     const dir = dirname(currentFile);
-    // Look for common schema file locations
-    const possiblePaths = [
-      join(dir, "schemas", `${schemaName}.ts`),
-      join(dir, "schemas.ts"),
-      join(dir, `${schemaName}.ts`),
-      join(projectRoot, "src", "schemas", `${schemaName}.ts`),
-      join(projectRoot, "lib", "schemas", `${schemaName}.ts`),
-    ];
+    const possiblePaths: string[] = [];
 
+    // Handle different import path patterns
+    if (importSource.startsWith(".")) {
+      // Relative import: ./schemas or ../schemas/user
+      const baseResolved = resolve(dir, importSource);
+      possiblePaths.push(
+        `${baseResolved}.ts`,
+        `${baseResolved}.js`,
+        `${baseResolved}/index.ts`,
+        `${baseResolved}/index.js`
+      );
+    } else if (importSource.startsWith("@/")) {
+      // Alias import: @/schemas/user (common in Next.js)
+      const relativePath = importSource.replace("@/", "");
+      possiblePaths.push(
+        join(projectRoot, "src", `${relativePath}.ts`),
+        join(projectRoot, "src", `${relativePath}.js`),
+        join(projectRoot, `${relativePath}.ts`),
+        join(projectRoot, `${relativePath}.js`)
+      );
+    } else if (importSource.startsWith("~/")) {
+      // Alias import: ~/schemas/user
+      const relativePath = importSource.replace("~/", "");
+      possiblePaths.push(
+        join(projectRoot, "src", `${relativePath}.ts`),
+        join(projectRoot, `${relativePath}.ts`)
+      );
+    } else {
+      // Fallback: check common schema locations
+      possiblePaths.push(
+        join(dir, "schemas", `${schemaName}.ts`),
+        join(dir, "schemas.ts"),
+        join(projectRoot, "src", "schemas", `${schemaName}.ts`),
+        join(projectRoot, "lib", "schemas", `${schemaName}.ts`)
+      );
+    }
+
+    // Try each possible path
     for (const path of possiblePaths) {
       if (existsSync(path)) {
         const content = readFileSync(path, "utf-8");
-        const schemas = extractZodSchemasFromAST(content, path);
+        const schemas = extractZodSchemasFromAST(content, path, projectRoot);
         const schema = schemas.get(schemaName);
         if (schema) return schema;
       }

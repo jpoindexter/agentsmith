@@ -48,7 +48,7 @@ export async function scanApiRoutes(dir: string, typeExports?: TypeExport[]): Pr
 
   for (const file of files) {
     const content = readFileSync(`${dir}/${file}`, "utf-8");
-    const route = parseRoute(file, content, typeExports);
+    const route = parseRoute(file, content, dir, typeExports);
     if (route) {
       routes.push(route);
     }
@@ -62,7 +62,7 @@ export async function scanApiRoutes(dir: string, typeExports?: TypeExport[]): Pr
  * Parses a route file to extract HTTP methods, auth status, and schemas
  * Supports both App Router (export function GET/POST) and Pages Router styles
  */
-function parseRoute(file: string, content: string, typeExports?: TypeExport[]): ApiRoute | null {
+function parseRoute(file: string, content: string, projectRoot: string, typeExports?: TypeExport[]): ApiRoute | null {
   const methods: string[] = [];
   if (content.includes("export async function GET") || content.includes("export function GET")) {
     methods.push("GET");
@@ -110,7 +110,7 @@ function parseRoute(file: string, content: string, typeExports?: TypeExport[]): 
     content.includes("Unauthorized");
 
   // Extract schemas from Zod and TypeScript using AST parser
-  const zodSchemas = extractZodSchemas(content, file);
+  const zodSchemas = extractZodSchemas(content, file, projectRoot);
   const tsSchemas = extractTypeScriptSchemas(content);
 
   // Merge schemas (prefer Zod as it has validation info)
@@ -169,9 +169,9 @@ function fileToApiPath(file: string): string {
 
 /**
  * Extracts Zod schemas from route file content using AST parser
- * Provides 95%+ accuracy compared to regex-based parsing
+ * Provides 95%+ accuracy and resolves imported schemas
  */
-function extractZodSchemas(content: string, filePath: string): {
+function extractZodSchemas(content: string, filePath: string, projectRoot: string): {
   requestSchema?: ApiSchema;
   responseSchema?: ApiSchema;
   querySchema?: ApiSchema;
@@ -182,8 +182,9 @@ function extractZodSchemas(content: string, filePath: string): {
     querySchema?: ApiSchema;
   } = {};
 
-  // Use AST-based extraction
-  const allSchemas = extractZodSchemasFromAST(content, filePath);
+  // Use AST-based extraction with import resolution
+  const fullPath = `${projectRoot}/${filePath}`;
+  const allSchemas = extractZodSchemasFromAST(content, fullPath, projectRoot);
 
   // Match schemas to request/response based on naming and usage
   for (const [schemaName, schema] of allSchemas) {
