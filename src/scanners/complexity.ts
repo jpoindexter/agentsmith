@@ -10,6 +10,7 @@
 import fg from "fast-glob";
 import { readFileSync, existsSync } from "fs";
 import { execSync } from "child_process";
+import { escapeShellPath } from "../utils/shell.js";
 
 /** Complexity level for files or sections */
 export type ComplexityLevel = "low" | "medium" | "high";
@@ -318,7 +319,9 @@ function calculateGitChurn(relativePath: string, dir: string): number {
   try {
     if (!existsSync(`${dir}/.git`)) return 0;
 
-    const result = execSync(`git log --oneline --follow -- "${relativePath}" | wc -l`, {
+    // Sanitize path to prevent command injection
+    const safePath = escapeShellPath(relativePath);
+    const result = execSync(`git log --oneline --follow -- ${safePath} | wc -l`, {
       cwd: dir,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "ignore"], // Suppress stderr

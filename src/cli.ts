@@ -46,12 +46,13 @@ import { detectMonorepo, formatMonorepoOverview } from "./scanners/monorepo.js";
 import { scanGraphQL } from "./scanners/graphql.js";
 import { generateAgentsMd } from "./generator.js";
 import { generateAgentsIndex } from "./json-generator.js";
+import { validateGitUrl, escapeShellPath } from "./utils/shell.js";
 import { estimateTokens, formatTokens, getContextUsage } from "./utils/tokens.js";
 import { detectSecrets } from "./utils/secrets.js";
 import { parseSize, splitContent, getSplitFilenames } from "./utils/split.js";
 import { loadConfig } from "./config.js";
 import { writeFileSync, existsSync, rmSync, watch } from "fs";
-import { join } from "path";
+import { join, relative } from "path";
 import { execSync } from "child_process";
 
 const cli = cac("agentsmith");
@@ -97,12 +98,16 @@ cli
       console.log(pc.dim(`  Cloning ${options.remote}...\n`));
 
       try {
+        // Validate and sanitize git URL to prevent command injection
+        const safeUrl = validateGitUrl(options.remote);
+        const safeTempDir = escapeShellPath(tempDir);
+
         // Clean up any existing temp directory
         if (existsSync(tempDir)) {
           rmSync(tempDir, { recursive: true });
         }
         // Clone the repository
-        execSync(`git clone --depth 1 ${options.remote} ${tempDir}`, { stdio: "pipe" });
+        execSync(`git clone --depth 1 ${safeUrl} ${safeTempDir}`, { stdio: "pipe" });
         targetDir = tempDir;
         console.log(pc.green(`  ✓ Cloned repository\n`));
       } catch (error) {
@@ -440,6 +445,20 @@ cli
         }
 
         console.log(pc.dim(`    ~${formatTokens(tokenCount)} tokens (${contextUsage}% of 128K context)\n`));
+
+        // Warn if AGENTS.md is tracked in git
+        try {
+          const outputPath = join(writeDir, finalOutputFile);
+          const relativePath = relative(writeDir, outputPath);
+          execSync(`git ls-files --error-unmatch "${relativePath}"`, { cwd: writeDir, stdio: "pipe" });
+
+          // If we get here, the file is tracked
+          console.log(pc.yellow(`  ⚠ WARNING: ${finalOutputFile} is tracked in git!`));
+          console.log(pc.yellow(`    Add to .gitignore to prevent accidentally committing secrets:\n`));
+          console.log(pc.dim(`    echo "AGENTS.md" >> .gitignore\n`));
+        } catch {
+          // File not tracked or not a git repo - this is good!
+        }
 
         // Copy to clipboard if requested
         if (options.copy) {
