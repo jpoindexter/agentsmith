@@ -117,6 +117,12 @@ function parseRoute(file: string, content: string, typeExports?: TypeExport[]): 
   let responseSchema = zodSchemas.responseSchema || tsSchemas.responseSchema;
   const querySchema = zodSchemas.querySchema;
 
+  // Only include request schema for methods that accept request bodies
+  const hasBodyMethod = methods.some(m => ["POST", "PUT", "PATCH"].includes(m));
+  if (!hasBodyMethod) {
+    requestSchema = undefined;
+  }
+
   // Resolve TypeScript type references if we have type exports
   if (typeExports) {
     if (requestSchema?.source === "typescript" && requestSchema.name) {
