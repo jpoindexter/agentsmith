@@ -165,16 +165,41 @@ function extractImports(content: string, file: string, dir: string): { internal:
   const internal: string[] = [];
   const external: string[] = [];
 
+  // Clean content: remove comments and string literals to avoid false positives
+  let cleanedContent = content;
+
+  // Remove single-line comments
+  cleanedContent = cleanedContent.replace(/\/\/.*$/gm, '');
+
+  // Remove multi-line comments (including JSDoc)
+  cleanedContent = cleanedContent.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Remove template literals (they can contain fake imports in generator code)
+  cleanedContent = cleanedContent.replace(/`(?:[^`\\]|\\.)*`/g, '""');
+
+  // Remove regular string literals (but not the imports themselves)
+  // We'll keep the import/require statements but remove other strings
+  cleanedContent = cleanedContent.replace(/(['"])(?:(?!\1).)*?\1/g, (match) => {
+    // Keep if it's part of import or require statement
+    if (match.startsWith('"') || match.startsWith("'")) {
+      const before = cleanedContent.substring(Math.max(0, cleanedContent.indexOf(match) - 50), cleanedContent.indexOf(match));
+      if (/import\s+.*from\s*$/.test(before) || /require\s*\(\s*$/.test(before)) {
+        return match; // Keep import/require strings
+      }
+    }
+    return '""'; // Replace other strings
+  });
+
   // Match import statements
   const importRegex = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['"]([^'"]+)['"]/g;
   // Match require statements
   const requireRegex = /require\(['"]([^'"]+)['"]\)/g;
 
   let match;
-  while ((match = importRegex.exec(content)) !== null) {
+  while ((match = importRegex.exec(cleanedContent)) !== null) {
     categorizeImport(match[1], file, dir, internal, external);
   }
-  while ((match = requireRegex.exec(content)) !== null) {
+  while ((match = requireRegex.exec(cleanedContent)) !== null) {
     categorizeImport(match[1], file, dir, internal, external);
   }
 
