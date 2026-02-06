@@ -35,10 +35,32 @@ interface ImportedSchema {
 const schemaCache = new Map<string, Map<string, ApiSchema>>();
 
 /**
+ * Warning messages collected during parsing
+ */
+const warnings: string[] = [];
+
+/**
  * Clear the schema cache (useful for testing or when files change)
  */
 export function clearSchemaCache(): void {
   schemaCache.clear();
+  warnings.length = 0;
+}
+
+/**
+ * Get collected warnings
+ */
+export function getWarnings(): string[] {
+  return [...warnings];
+}
+
+/**
+ * Add a warning message
+ */
+function addWarning(message: string): void {
+  if (!warnings.includes(message)) {
+    warnings.push(message);
+  }
 }
 
 /**
@@ -102,11 +124,15 @@ export function extractZodSchemasFromAST(
         );
         if (resolvedSchema && !schemas.has(imported.name)) {
           schemas.set(imported.name, resolvedSchema);
+        } else if (!resolvedSchema) {
+          addWarning(`Could not resolve imported schema: ${imported.name} from "${imported.source}" in ${filePath}`);
         }
       }
     }
   } catch (error) {
     // AST parsing failed, fall back to empty result
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    addWarning(`AST parsing failed for ${filePath}: ${errorMsg}`);
     schemaCache.set(filePath, schemas);
     return schemas;
   }
@@ -686,8 +712,110 @@ function traverseAST(node: TSESTree.Node, visitor: (node: TSESTree.Node) => void
 }
 
 /**
+ * Resolves package import from node_modules
+ * Example: import { UserSchema } from '@acme/shared-schemas'
+ */
+function resolvePackageSchema(
+  schemaName: string,
+  packageName: string,
+  projectRoot: string
+): ApiSchema | null {
+  try {
+    // Find package.json in node_modules
+    const packageJsonPath = join(projectRoot, "node_modules", packageName, "package.json");
+
+    if (!existsSync(packageJsonPath)) {
+      addWarning(`Package not found in node_modules: ${packageName}`);
+      return null;
+    }
+
+    // Read package.json to find entry point
+    const packageJsonContent = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(packageJsonContent);
+
+    const possiblePaths: string[] = [];
+    const packageDir = dirname(packageJsonPath);
+
+    // Check exports field (modern Node.js packages)
+    if (packageJson.exports) {
+      if (typeof packageJson.exports === "string") {
+        possiblePaths.push(resolve(packageDir, packageJson.exports));
+      } else if (typeof packageJson.exports === "object") {
+        // Handle exports with conditions like { ".": { "import": "./dist/index.js" } }
+        const mainExport = packageJson.exports["."] || packageJson.exports["./index"];
+        if (typeof mainExport === "string") {
+          possiblePaths.push(resolve(packageDir, mainExport));
+        } else if (typeof mainExport === "object") {
+          // Try different conditions: import, require, default
+          const exportPath = mainExport.import || mainExport.require || mainExport.default;
+          if (exportPath) {
+            possiblePaths.push(resolve(packageDir, exportPath));
+          }
+        }
+      }
+    }
+
+    // Check types field (TypeScript definitions)
+    if (packageJson.types || packageJson.typings) {
+      possiblePaths.push(resolve(packageDir, packageJson.types || packageJson.typings));
+    }
+
+    // Check main field (traditional entry point)
+    if (packageJson.main) {
+      possiblePaths.push(resolve(packageDir, packageJson.main));
+    }
+
+    // Fallback to common entry points
+    possiblePaths.push(
+      join(packageDir, "index.ts"),
+      join(packageDir, "index.js"),
+      join(packageDir, "dist", "index.ts"),
+      join(packageDir, "dist", "index.js"),
+      join(packageDir, "src", "index.ts"),
+      join(packageDir, "src", "index.js")
+    );
+
+    // Try to resolve from each entry point
+    for (const entryPath of possiblePaths) {
+      // Try with and without extensions
+      const pathsToTry = [
+        entryPath,
+        entryPath.replace(/\.js$/, ".ts"),
+        entryPath.replace(/\.mjs$/, ".ts"),
+        entryPath.replace(/\.cjs$/, ".ts")
+      ];
+
+      for (const path of pathsToTry) {
+        if (existsSync(path)) {
+          // Check if already cached
+          const cached = schemaCache.get(path);
+          if (cached) {
+            const schema = cached.get(schemaName);
+            if (schema) return schema;
+          }
+
+          // Parse the file
+          const content = readFileSync(path, "utf-8");
+          const schemas = extractZodSchemasFromAST(content, path, projectRoot);
+          const schema = schemas.get(schemaName);
+          if (schema) return schema;
+        }
+      }
+    }
+
+    addWarning(`Schema "${schemaName}" not found in package: ${packageName}`);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    addWarning(`Failed to resolve package schema "${schemaName}" from ${packageName}: ${errorMsg}`);
+  }
+
+  return null;
+}
+
+/**
  * Resolves schema import from another file
  * Example: import { UserSchema } from './schemas/user'
+ * Also supports package imports: import { UserSchema } from '@acme/schemas'
  */
 export function resolveSchemaImport(
   schemaName: string,
@@ -725,6 +853,9 @@ export function resolveSchemaImport(
         join(projectRoot, "src", `${relativePath}.ts`),
         join(projectRoot, `${relativePath}.ts`)
       );
+    } else if (!importSource.startsWith(".") && !importSource.startsWith("@/") && !importSource.startsWith("~/")) {
+      // Package import: @acme/schemas or shared-schemas
+      return resolvePackageSchema(schemaName, importSource, projectRoot);
     } else {
       // Fallback: check common schema locations
       possiblePaths.push(

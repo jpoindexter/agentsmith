@@ -32,9 +32,15 @@ coverage/
 *.tmp
 *.temp
 .agentsmith-temp/
+test-*.ts
+node_modules/@test/
 
 # Generated files (don't commit output)
 AGENTS.md
 AGENTS.xml
 AGENTS.index.json
 AGENTS-*.md
+
+# Blog content (private, not for publication)
+blog/
+*.draft.md
