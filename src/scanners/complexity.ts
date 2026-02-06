@@ -2,13 +2,14 @@
  * Complexity Analyzer
  *
  * Analyzes codebase complexity to recommend AI model/effort settings.
- * Categorizes files and areas as high/medium/low complexity.
+ * Uses multiple metrics: cyclomatic complexity, git churn, coupling, and size.
  *
  * @module scanners/complexity
  */
 
 import fg from "fast-glob";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
+import { execSync } from "child_process";
 
 /** Complexity level for files or sections */
 export type ComplexityLevel = "low" | "medium" | "high";
@@ -74,7 +75,7 @@ export async function analyzeComplexity(dir: string): Promise<AIRecommendations>
   const fileComplexities: FileComplexity[] = [];
 
   for (const file of files) {
-    const complexity = analyzeFile(`${dir}/${file}`, file);
+    const complexity = analyzeFile(`${dir}/${file}`, file, dir);
     if (complexity) {
       fileComplexities.push(complexity);
     }
@@ -92,12 +93,12 @@ export async function analyzeComplexity(dir: string): Promise<AIRecommendations>
   const avgComplexity =
     fileComplexities.reduce((sum, f) => sum + f.score, 0) / fileComplexities.length;
 
-  // Generate recommendations
-  const extendedThinkingRecommended = avgComplexity > 40 || complexFiles[0]?.score > 60;
+  // Generate recommendations based on improved scoring
+  const extendedThinkingRecommended = avgComplexity > 35 || complexFiles[0]?.score > 55;
 
   return {
-    simpleModel: avgComplexity > 30 ? "sonnet" : "haiku",
-    complexModel: avgComplexity > 50 ? "opus" : "sonnet",
+    simpleModel: avgComplexity > 25 ? "sonnet" : "haiku",
+    complexModel: avgComplexity > 45 ? "opus" : "sonnet",
     extendedThinkingRecommended,
     areas,
     complexFiles,
@@ -105,9 +106,9 @@ export async function analyzeComplexity(dir: string): Promise<AIRecommendations>
 }
 
 /**
- * Analyzes individual file complexity
+ * Analyzes individual file complexity using multiple metrics
  */
-function analyzeFile(fullPath: string, relativePath: string): FileComplexity | null {
+function analyzeFile(fullPath: string, relativePath: string, dir: string): FileComplexity | null {
   try {
     const content = readFileSync(fullPath, "utf-8");
     const lines = content.split("\n").length;
@@ -115,71 +116,83 @@ function analyzeFile(fullPath: string, relativePath: string): FileComplexity | n
     const reasons: string[] = [];
     let score = 0;
 
-    // Base score from lines
+    // 1. SIZE COMPLEXITY (max 20 points)
     if (lines > 500) {
-      score += 30;
+      score += 20;
       reasons.push("large file (>500 lines)");
-    } else if (lines > 200) {
-      score += 15;
-      reasons.push("moderate size (>200 lines)");
+    } else if (lines > 300) {
+      score += 12;
+      reasons.push("moderately large (>300 lines)");
+    } else if (lines > 150) {
+      score += 6;
     }
 
-    // Nested complexity (deep nesting)
-    const maxNesting = calculateMaxNesting(content);
-    if (maxNesting > 5) {
+    // 2. CYCLOMATIC COMPLEXITY (max 25 points)
+    const cyclomaticComplexity = calculateCyclomaticComplexity(content);
+    if (cyclomaticComplexity > 50) {
       score += 25;
-      reasons.push("deep nesting");
-    } else if (maxNesting > 3) {
+      reasons.push("high cyclomatic complexity");
+    } else if (cyclomaticComplexity > 30) {
+      score += 18;
+      reasons.push("moderate cyclomatic complexity");
+    } else if (cyclomaticComplexity > 15) {
       score += 10;
     }
 
-    // Async/Promise complexity
+    // 3. GIT CHURN (max 15 points) - frequently changed files need more attention
+    const churn = calculateGitChurn(relativePath, dir);
+    if (churn > 50) {
+      score += 15;
+      reasons.push("frequently modified (hot spot)");
+    } else if (churn > 20) {
+      score += 10;
+      reasons.push("moderate change frequency");
+    } else if (churn > 10) {
+      score += 5;
+    }
+
+    // 4. COUPLING (max 15 points) - high coupling increases complexity
+    const coupling = calculateCoupling(content);
+    if (coupling > 30) {
+      score += 15;
+      reasons.push("high coupling (many imports)");
+    } else if (coupling > 15) {
+      score += 10;
+      reasons.push("moderate coupling");
+    } else if (coupling > 8) {
+      score += 5;
+    }
+
+    // 5. ASYNC COMPLEXITY (max 10 points)
     const asyncCount = (content.match(/async|await|Promise/g) || []).length;
     if (asyncCount > 20) {
-      score += 20;
+      score += 10;
       reasons.push("heavy async logic");
     } else if (asyncCount > 10) {
-      score += 10;
+      score += 5;
     }
 
-    // RegExp complexity
+    // 6. REGEX COMPLEXITY (max 10 points)
     const regexCount = (content.match(/\/[^/]+\/[gimuy]*/g) || []).length;
     if (regexCount > 10) {
-      score += 15;
+      score += 10;
       reasons.push("complex regex patterns");
+    } else if (regexCount > 5) {
+      score += 5;
     }
 
-    // Type complexity (generics, unions)
+    // 7. TYPE COMPLEXITY (max 5 points)
     const genericCount = (content.match(/<[A-Z][^>]*>/g) || []).length;
     const unionCount = (content.match(/\|/g) || []).length;
-    if (genericCount + unionCount > 30) {
-      score += 15;
+    if (genericCount + unionCount > 40) {
+      score += 5;
       reasons.push("complex types");
-    }
-
-    // Error handling
-    const tryCount = (content.match(/try\s*\{/g) || []).length;
-    if (tryCount > 5) {
-      score += 10;
-      reasons.push("extensive error handling");
-    }
-
-    // Database/ORM complexity
-    if (
-      content.includes("prisma") ||
-      content.includes("drizzle") ||
-      content.includes("query")
-    ) {
-      score += 10;
-      if (content.match(/\.(findMany|findUnique|create|update|delete)/g)?.length > 5) {
-        reasons.push("database operations");
-      }
     }
 
     // Determine level
     let level: ComplexityLevel = "low";
     if (score > 50) level = "high";
-    else if (score > 25) level = "medium";
+    else if (score > 30) level = "medium";
 
     return {
       path: relativePath,
@@ -194,46 +207,89 @@ function analyzeFile(fullPath: string, relativePath: string): FileComplexity | n
 }
 
 /**
- * Calculates maximum nesting depth in code
+ * Calculates cyclomatic complexity (decision points)
+ * Counts: if/else, loops, case, ternary, logical operators
  */
-function calculateMaxNesting(content: string): number {
-  let max = 0;
-  let current = 0;
+function calculateCyclomaticComplexity(content: string): number {
+  let complexity = 1; // Base complexity
 
-  for (const char of content) {
-    if (char === "{" || char === "(") {
-      current++;
-      if (current > max) max = current;
-    } else if (char === "}" || char === ")") {
-      current--;
-    }
-  }
+  // Control flow statements
+  const ifCount = (content.match(/\bif\s*\(/g) || []).length;
+  const elseCount = (content.match(/\belse\b/g) || []).length;
+  const forCount = (content.match(/\bfor\s*\(/g) || []).length;
+  const whileCount = (content.match(/\bwhile\s*\(/g) || []).length;
+  const caseCount = (content.match(/\bcase\s+/g) || []).length;
+  const catchCount = (content.match(/\bcatch\s*\(/g) || []).length;
 
-  return max;
+  // Logical operators (each adds a decision point)
+  const andOrCount = (content.match(/(\&\&|\|\|)/g) || []).length;
+  const ternaryCount = (content.match(/\?[^:]+:/g) || []).length;
+
+  complexity += ifCount + elseCount + forCount + whileCount + caseCount + catchCount;
+  complexity += andOrCount + ternaryCount;
+
+  return complexity;
 }
 
 /**
- * Categorizes files by area (API, Components, etc.)
+ * Calculates git churn (number of times file changed)
+ * Returns 0 if not in a git repo or file not tracked
+ */
+function calculateGitChurn(relativePath: string, dir: string): number {
+  try {
+    if (!existsSync(`${dir}/.git`)) return 0;
+
+    const result = execSync(`git log --oneline --follow -- "${relativePath}" | wc -l`, {
+      cwd: dir,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"], // Suppress stderr
+    });
+
+    return parseInt(result.trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Calculates coupling (number of imports)
+ */
+function calculateCoupling(content: string): number {
+  const importCount = (content.match(/^import\s+/gm) || []).length;
+  const requireCount = (content.match(/require\s*\(/g) || []).length;
+  return importCount + requireCount;
+}
+
+/**
+ * Categorizes files by area with better categorization
  */
 function categorizeByArea(files: FileComplexity[]): AreaComplexity[] {
   const areas = new Map<string, FileComplexity[]>();
 
   for (const file of files) {
-    let areaName = "Other";
+    let areaName = "Source Files"; // Default instead of "Other"
 
-    if (file.path.includes("/api/") || file.path.includes("/pages/api/")) {
+    // Check in priority order (most specific first)
+    if (file.path.includes("/api/") || file.path.includes("/pages/api/") || file.path.includes("/app/api/")) {
       areaName = "API Routes";
-    } else if (
-      file.path.includes("/components/") ||
-      file.path.match(/\.tsx$/)
-    ) {
+    } else if (file.path.includes("/hooks/") || file.path.startsWith("use")) {
+      areaName = "Hooks";
+    } else if (file.path.includes("prisma") || file.path.includes("/db/") || file.path.includes("database")) {
+      areaName = "Database";
+    } else if (file.path.includes("/components/") || file.path.includes("/ui/")) {
       areaName = "Components";
+    } else if (file.path.match(/\.tsx$/)) {
+      areaName = "Pages/Routes";
     } else if (file.path.includes("/lib/") || file.path.includes("/utils/")) {
       areaName = "Utilities";
-    } else if (file.path.includes("/hooks/")) {
-      areaName = "Hooks";
-    } else if (file.path.includes("prisma") || file.path.includes("/db/")) {
-      areaName = "Database";
+    } else if (file.path.includes("/types/") || file.path.includes("types.ts")) {
+      areaName = "Type Definitions";
+    } else if (file.path.includes("/actions/") || file.path.includes("/mutations/")) {
+      areaName = "Server Actions";
+    } else if (file.path.includes("/config/") || file.path.includes(".config.")) {
+      areaName = "Configuration";
+    } else if (file.path.includes("/scanners/") || file.path.includes("/parsers/")) {
+      areaName = "Scanners/Parsers";
     }
 
     if (!areas.has(areaName)) {
@@ -249,8 +305,8 @@ function categorizeByArea(files: FileComplexity[]): AreaComplexity[] {
       areaFiles.reduce((sum, f) => sum + f.score, 0) / areaFiles.length;
 
     let level: ComplexityLevel = "low";
-    if (avgScore > 40) level = "high";
-    else if (avgScore > 20) level = "medium";
+    if (avgScore > 45) level = "high";
+    else if (avgScore > 30) level = "medium";
 
     const characteristics: string[] = [];
     const reasonCounts = new Map<string, number>();
