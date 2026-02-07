@@ -53,6 +53,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Why it matters**: agentsmith output now works for any AI assistant, not just Claude.
 
+#### 🏗️ MCP Server Upgrade
+- Expanded from 4 tools to 16 tools for comprehensive codebase analysis
+- Added 5 MCP Resources (live subscriptions): AGENTS.md, API Schemas, Database Schema, GraphQL Schemas, Complexity Report
+- Smart caching with 5-minute TTL and per-directory isolation
+- 10x speed improvement for repeated queries
+
+#### 🔒 Security Hardening
+- Command injection protection via `escapeShellArg()` for all shell operations
+- Git URL validation (protocol and domain allowlisting)
+- Warning when AGENTS.md is tracked in git (prevents accidentally committing secrets)
+
+#### 🔄 CI/CD
+- GitHub Actions CI workflow: typecheck + build on Node 18, 20, 22
+- Automated npm publishing with provenance on version tags
+
 ### Fixed
 - Import scanner now filters out comments and template strings
 - No more fake imports from JSDoc examples or generated code

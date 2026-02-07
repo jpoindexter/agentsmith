@@ -109,7 +109,7 @@ agentsmith --xml
 agentsmith --tree
 ```
 
-## What's New in v1.1.0
+## What's New in v1.1
 
 ### 🎯 API Schema Extraction
 Now detects **Zod validation schemas** and **TypeScript types** from your API routes:
@@ -199,11 +199,25 @@ agentsmith can run as an MCP (Model Context Protocol) server for AI tool integra
 agentsmith --mcp
 ```
 
-Exposes these tools to AI assistants:
-- `pack_codebase` - Generate AGENTS.md for a directory
-- `read_agents` - Read existing AGENTS.md
-- `search_components` - Search components by name
-- `get_component_info` - Get detailed component info with source
+**16 tools** for AI assistants:
+
+| Category | Tools |
+|----------|-------|
+| **Core** | `pack_codebase`, `read_agents` |
+| **Components** | `search_components`, `get_component_info` |
+| **API** | `get_api_routes`, `get_route_details`, `search_routes` |
+| **Database** | `get_database_models`, `get_model_details` |
+| **GraphQL** | `get_graphql_schemas` |
+| **Complexity** | `get_complexity_report`, `get_complex_files` |
+| **Hooks** | `get_hooks`, `get_hook_details` |
+| **Search** | `search_codebase`, `get_file_info` |
+
+**5 MCP Resources** (live subscriptions with caching):
+- `agents://agents-md` - Auto-generated AGENTS.md
+- `agents://api-schemas` - All API route schemas
+- `agents://database-schema` - Database models with fields and relations
+- `agents://graphql-schemas` - GraphQL type definitions
+- `agents://complexity-report` - Codebase complexity analysis
 
 ## Configuration
 
