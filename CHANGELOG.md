@@ -5,7 +5,14 @@ All notable changes to agentsmith will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-02-06
+## [1.1.3] - 2026-02-06
+
+### Fixed
+- Version now displays correctly when installed via npm/npx
+- CI/CD publish workflow uses `gh` CLI instead of deprecated `actions/create-release`
+- Correct npm secret name in publish workflow
+
+## [1.1.0] - 2026-02-06
 
 ### Added
 
@@ -56,12 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - More accurate complexity scoring for files with high cognitive load
 - Improved schema extraction accuracy from 85% to 95%+ with AST parsing
 
-## [1.0.1] - 2025-01-15
+## [1.0.1] - 2026-01-15
 
 ### Fixed
 - Initial bug fixes and stability improvements
 
-## [1.0.0] - 2025-01-10
+## [1.0.0] - 2026-01-10
 
 ### Added
 - Initial release
