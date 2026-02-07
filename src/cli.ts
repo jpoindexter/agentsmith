@@ -62,7 +62,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Try to read package.json from multiple possible locations
-let packageVersion = "1.1.2"; // fallback
+let packageVersion = "1.1.4"; // fallback
 try {
   // When running from dist in development or from installed package
   const packageJson = JSON.parse(readFileSync(pathJoin(__dirname, "../package.json"), "utf-8"));

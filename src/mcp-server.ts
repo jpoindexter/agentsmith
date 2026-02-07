@@ -24,7 +24,17 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { existsSync, readFileSync } from "fs";
-import { join, resolve } from "path";
+import { join, resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __mcpDirname = dirname(fileURLToPath(import.meta.url));
+let mcpVersion = "1.1.4";
+try {
+  const pkg = JSON.parse(readFileSync(join(__mcpDirname, "../package.json"), "utf-8"));
+  mcpVersion = pkg.version;
+} catch {
+  // fallback
+}
 
 // Import scanners
 import { scanComponents } from "./scanners/components.js";
@@ -81,7 +91,7 @@ function setCache<T>(key: string, directory: string, data: T): void {
 const server = new Server(
   {
     name: "agentsmith",
-    version: "1.1.0",
+    version: mcpVersion,
   },
   {
     capabilities: {
